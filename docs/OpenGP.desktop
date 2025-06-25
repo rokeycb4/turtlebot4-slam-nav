@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=GitPackage
+Exec=code /home/kiwi/github_package/rokeypj_ws
+Icon=code
+Type=Application
+Terminal=false
+
