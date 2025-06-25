@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Open ws in Terminator
+Exec=bash -c "terminator --working-directory=\"$HOME/github_package/turtlebot4-slam-nav/turtlebot4_ws\""
+Icon=utilities-terminal
+Type=Application
+Terminal=false
+

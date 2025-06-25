@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=TurtleBot4 Folder
+Comment=Open TurtleBot4 project folder
+Exec=bash -c "xdg-open \"$HOME/github_package/turtlebot4-slam-nav/\""
+Icon=folder
+Terminal=false
+Type=Application
+

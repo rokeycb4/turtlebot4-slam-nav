@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=GitPackage
+Exec=bash -c "code \"$HOME/github_package/turtlebot4-slam-nav\""
+Icon=code
+Type=Application
+Terminal=false
+

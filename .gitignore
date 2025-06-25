@@ -1,0 +1,7 @@
+# Turtlebot4 workspace 빌드 및 로그 디렉토리 무시
+turtlebot4_ws/build/
+turtlebot4_ws/install/
+turtlebot4_ws/log/
+
+
+.vscode/
