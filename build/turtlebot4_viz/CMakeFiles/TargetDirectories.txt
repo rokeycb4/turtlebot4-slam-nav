@@ -1,9 +1,0 @@
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/uninstall.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/turtlebot4_viz_uninstall.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/test.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/edit_cache.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/rebuild_cache.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/list_install_components.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/install.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/install/local.dir
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz/CMakeFiles/install/strip.dir

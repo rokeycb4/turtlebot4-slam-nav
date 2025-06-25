@@ -1,1 +1,0 @@
-/home/rokey/github_package/turtlebot4-slam-nav/turtlebot4_ws/src/turtlebot4/turtlebot4_node/include/turtlebot4_node/turtlebot4.hpp

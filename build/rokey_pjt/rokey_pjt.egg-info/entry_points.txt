@@ -1,5 +1,0 @@
-[console_scripts]
-depth_checker = rokey_pjt.depth_checker:main
-depth_checker_mouse_click = rokey_pjt.depth_checker_mouse_click:main
-tf_point_transform = rokey_pjt.tf_point_transform:main
-

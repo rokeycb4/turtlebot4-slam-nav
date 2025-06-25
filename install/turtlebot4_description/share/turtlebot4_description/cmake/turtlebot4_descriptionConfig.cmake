@@ -1,1 +1,0 @@
-/home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_description/ament_cmake_core/turtlebot4_descriptionConfig.cmake
