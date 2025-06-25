@@ -1,43 +1,7 @@
 
-## 의존성 + 종속성 관리
-```bash
-sudo rosdep init
-rosdep update
-
-rosdep install --from-path src -yi --rosdistro humble
-
-```
-
-
-## SSH 접속
-```bash
-ssh ubuntu@192.168.103.3
-cd /opt/ros/humble/share/turtlebot4_bringup/config
-
-# 원본백업
-sudo cp turtlebot4.yaml turtlebot4_origin.yaml
-
-#설정
-sudo nano turtlebot4.yaml
-sudo nano oakd_pro.yaml
-
-sudo reboot
-```
-
-## 네트워크/CPU 부하 확인  
-```bash
-ssh ubuntu@192.168.103.3
-nmcli device status
-sudo iftop -i wlan0 
-htop
-gnome-system-monitor
-```
-
-
 ## Robot_TF Transform
 ```bash
-ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/github_package/turtlebot4-slam-nav/turtlebot4_ws/maps/first_map.yaml
-
+ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/github_package/turtlebot4-slam-nav/turtlebot4_ws/map
 
 ros2 launch turtlebot4_navigation localization.launch.py \
   namespace:=/robot3 \
