@@ -1,7 +1,8 @@
 
 ## Robot_TF Transform
 ```bash
-ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/github_package/turtlebot4-slam-nav/turtlebot4_ws/map
+ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/github_package/turtlebot4-slam-nav/turtlebot4_ws/maps/first_map.yaml
+
 
 ros2 launch turtlebot4_navigation localization.launch.py \
   namespace:=/robot3 \

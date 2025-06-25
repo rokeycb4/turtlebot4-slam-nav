@@ -1,0 +1,9 @@
+source;share/rokey_pjt/hook/pythonpath.ps1
+source;share/rokey_pjt/hook/pythonpath.dsv
+source;share/rokey_pjt/hook/pythonpath.sh
+source;share/rokey_pjt/hook/ament_prefix_path.ps1
+source;share/rokey_pjt/hook/ament_prefix_path.dsv
+source;share/rokey_pjt/hook/ament_prefix_path.sh
+source;../../build/rokey_pjt/share/rokey_pjt/hook/pythonpath_develop.ps1
+source;../../build/rokey_pjt/share/rokey_pjt/hook/pythonpath_develop.dsv
+source;../../build/rokey_pjt/share/rokey_pjt/hook/pythonpath_develop.sh

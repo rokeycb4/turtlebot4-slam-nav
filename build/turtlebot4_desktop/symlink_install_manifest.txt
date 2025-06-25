@@ -1,0 +1,15 @@
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/ament_index/resource_index/package_run_dependencies/turtlebot4_desktop
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/ament_index/resource_index/parent_prefix_path/turtlebot4_desktop
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/environment/ament_prefix_path.sh
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/environment/ament_prefix_path.dsv
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/environment/path.sh
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/environment/path.dsv
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/local_setup.bash
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/local_setup.sh
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/local_setup.zsh
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/local_setup.dsv
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/package.dsv
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/ament_index/resource_index/packages/turtlebot4_desktop
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/cmake/turtlebot4_desktopConfig.cmake
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/cmake/turtlebot4_desktopConfig-version.cmake
+/home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_desktop/share/turtlebot4_desktop/package.xml

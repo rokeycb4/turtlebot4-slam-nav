@@ -1,0 +1,48 @@
+-- The C compiler identification is GNU 11.4.0
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)
+-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+-- Override CMake install command with custom implementation using symlinks instead of copying resources
+-- Found ament_lint_auto: 0.12.12 (/opt/ros/humble/share/ament_lint_auto/cmake)
+-- Added test 'copyright' to check source files copyright and LICENSE
+-- Added test 'flake8' to check Python code syntax and style conventions
+-- Added test 'lint_cmake' to check CMake code style
+-- Added test 'pep257' to check Python code against some of the docstring style conventions in PEP 257
+-- Added test 'xmllint' to check XML markup files
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/rokey/github_package/turtlebot4-slam-nav/build/turtlebot4_viz
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/launch/view_diagnostics.launch.py
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/launch/view_model.launch.py
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/launch/view_navigation.launch.py
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/launch/view_robot.launch.py
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/rviz/model.rviz
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/rviz/navigation.rviz
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/rviz/robot.rviz
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/ament_index/resource_index/package_run_dependencies/turtlebot4_viz
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/ament_index/resource_index/parent_prefix_path/turtlebot4_viz
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/environment/ament_prefix_path.sh
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/environment/ament_prefix_path.dsv
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/environment/path.sh
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/environment/path.dsv
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/local_setup.bash
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/local_setup.sh
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/local_setup.zsh
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/local_setup.dsv
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/package.dsv
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/ament_index/resource_index/packages/turtlebot4_viz
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/cmake/turtlebot4_vizConfig.cmake
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/cmake/turtlebot4_vizConfig-version.cmake
+-- Symlinking: /home/rokey/github_package/turtlebot4-slam-nav/install/turtlebot4_viz/share/turtlebot4_viz/package.xml
