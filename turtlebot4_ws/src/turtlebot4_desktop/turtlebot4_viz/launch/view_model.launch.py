@@ -19,6 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, GroupAction,
                             IncludeLaunchDescription, TimerAction)
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 
@@ -26,6 +27,15 @@ from launch_ros.actions import Node, PushRosNamespace
 
 
 ARGUMENTS = [
+    DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation (Gazebo) clock if true'),
+    DeclareLaunchArgument(
+        'description',
+        default_value='false',
+        description='Launch turtlebot4 description'
+    ),
     DeclareLaunchArgument(
         'model',
         default_value='standard',
@@ -60,6 +70,7 @@ def generate_launch_description():
              executable='rviz2',
              name='rviz2',
              arguments=['-d', rviz2_config],
+             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
              remappings=[
                 ('/tf', 'tf'),
                 ('/tf_static', 'tf_static')
@@ -73,7 +84,8 @@ def generate_launch_description():
             actions=[
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource([description_launch]),
-                    launch_arguments=[('model', LaunchConfiguration('model'))]
+                    launch_arguments=[('model', LaunchConfiguration('model'))],
+                    condition=IfCondition(LaunchConfiguration('description'))
                 )])
     ])
 

@@ -3,5 +3,9 @@ turtlebot4_ws/build/
 turtlebot4_ws/install/
 turtlebot4_ws/log/
 
+rokey_ws/build/
+rokey_ws/install/
+rokey_ws/log/
+
 
 .vscode/
