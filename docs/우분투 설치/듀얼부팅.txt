@@ -1,0 +1,8 @@
+
+ - 이동할 수 없는 마지막 파일: \pagefile.sys::$DATA
+https://zeliard.tistory.com/entry/win10-cannot-shrink-volume-beyond-point-unmovable-files-located
+
+
+이 이미지는 Grub ... 사용하지만
+다른 버전의 Grub는 호환되지 않을 수 ...
+예
