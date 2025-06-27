@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# yolo_detect.py
 
 import rclpy
 from rclpy.node import Node
