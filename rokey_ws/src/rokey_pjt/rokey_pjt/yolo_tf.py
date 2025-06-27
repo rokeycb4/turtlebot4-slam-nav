@@ -50,6 +50,11 @@ class DetectObjectsWithTF(Node):
         )
 
         self.pub_image = self.create_publisher(Image, '/detect/yolo_distance_image', 10)
+
+        # ✅ 추가: base_link, map 좌표 발행용 퍼블리셔
+        self.pub_point_base = self.create_publisher(PointStamped, '/detect/point_base', 10)
+        self.pub_point_map = self.create_publisher(PointStamped, '/detect/point_map', 10)
+
         self.timer = self.create_timer(0.1, self.process_image)
 
     def camera_info_callback(self, msg):
@@ -106,7 +111,7 @@ class DetectObjectsWithTF(Node):
             point_cam.point.z = z
 
             try:
-                # camera_link -> base_link
+                # ✅ camera_link → base_link 변환
                 point_base = self.tf_buffer.transform(
                     point_cam, 
                     'base_link', 
@@ -119,7 +124,7 @@ class DetectObjectsWithTF(Node):
                     f"base_link({point_base.point.x:.2f}, {point_base.point.y:.2f}, {point_base.point.z:.2f})"
                 )
 
-                # base_link -> map
+                # ✅ base_link → map 변환
                 tf_base_to_map = self.tf_buffer.lookup_transform(
                     'map',
                     'base_link',
@@ -131,6 +136,10 @@ class DetectObjectsWithTF(Node):
                 self.get_logger().info(
                     f"[base_link → map] (x={point_map.point.x:.2f}, y={point_map.point.y:.2f}, z={point_map.point.z:.2f})"
                 )
+
+                # ✅ 퍼블리시
+                self.pub_point_base.publish(point_base)
+                self.pub_point_map.publish(point_map)
 
             except Exception as e:
                 self.get_logger().warn(
