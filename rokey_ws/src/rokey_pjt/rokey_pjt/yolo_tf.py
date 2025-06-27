@@ -106,6 +106,7 @@ class DetectObjectsWithTF(Node):
             point_cam.point.z = z
 
             try:
+                # camera_link -> base_link
                 point_base = self.tf_buffer.transform(
                     point_cam, 
                     'base_link', 
@@ -118,9 +119,22 @@ class DetectObjectsWithTF(Node):
                     f"base_link({point_base.point.x:.2f}, {point_base.point.y:.2f}, {point_base.point.z:.2f})"
                 )
 
+                # base_link -> map
+                tf_base_to_map = self.tf_buffer.lookup_transform(
+                    'map',
+                    'base_link',
+                    rclpy.time.Time(),
+                    timeout=rclpy.duration.Duration(seconds=0.5)
+                )
+                point_map = tf2_geometry_msgs.do_transform_point(point_base, tf_base_to_map)
+
+                self.get_logger().info(
+                    f"[base_link → map] (x={point_map.point.x:.2f}, y={point_map.point.y:.2f}, z={point_map.point.z:.2f})"
+                )
+
             except Exception as e:
                 self.get_logger().warn(
-                    f"TF 변환 실패: {point_cam.header.frame_id} → base_link | 이유: {e}"
+                    f"TF 변환 실패: {point_cam.header.frame_id} → base_link/map | 이유: {e}"
                 )
                 continue
 
