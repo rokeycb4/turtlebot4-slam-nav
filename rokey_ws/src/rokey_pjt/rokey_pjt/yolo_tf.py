@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+# yolo_tf.py
 
 import rclpy
 from rclpy.node import Node
 import numpy as np
-import cv2
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image, CameraInfo, CompressedImage
+import cv2 # 더 이상 이미지 퍼블리싱 안 하지만, 혹시 다른 디버깅 용도로 남겨둘 수 있음.
+from cv_bridge import CvBridge # 이미지 메시지 변환에 필요
+from sensor_msgs.msg import Image, CameraInfo, CompressedImage # 여전히 구독은 함
 from geometry_msgs.msg import PointStamped, TransformStamped
 from visualization_msgs.msg import Marker, MarkerArray
 import tf2_ros
@@ -17,12 +17,12 @@ class DetectObjectsWithTF(Node):
     def __init__(self):
         super().__init__('detect_objects_with_tf')
 
-        self.model = YOLO('/home/rokey/rokey_ws/src/yolov8_ros/yolov8_ros/best.pt')
+        self.model = YOLO('/home/rokey/rokey_ws/park_area.pt')
         self.get_logger().info("YOLO 모델 로드 완료")
 
         self.bridge = CvBridge()
         self.K = None
-        self.rgb_image = None
+        self.rgb_image = None # 이미지를 구독은 하지만, 시각화 퍼블리셔는 제거
         self.depth_image = None
         self.class_names = getattr(self.model, 'names', [])
 
@@ -31,11 +31,14 @@ class DetectObjectsWithTF(Node):
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         self.publish_static_transform()
 
+        # RGB 이미지와 Depth 이미지, CameraInfo 구독은 유지
         self.create_subscription(CompressedImage, '/robot3/oakd/rgb/image_raw/compressed', self.rgb_compressed_callback, 10)
         self.create_subscription(Image, '/robot3/oakd/stereo/image_raw', self.depth_callback, 10)
         self.create_subscription(CameraInfo, '/robot3/oakd/stereo/camera_info', self.camera_info_callback, 10)
 
-        self.pub_image = self.create_publisher(Image, '/detect/yolo_distance_image', 10)
+        # /detect/yolo_distance_image 퍼블리셔 제거
+        # self.pub_image = self.create_publisher(Image, '/detect/yolo_distance_image', 10)
+        
         self.pub_point_base = self.create_publisher(PointStamped, '/detect/point_base', 10)
         self.pub_point_map = self.create_publisher(PointStamped, '/detect/point_map', 10)
         self.pub_marker = self.create_publisher(MarkerArray, '/detect/object_markers', 10)
@@ -80,7 +83,7 @@ class DetectObjectsWithTF(Node):
         if self.rgb_image is None or self.depth_image is None or self.K is None:
             return
 
-        image = self.rgb_image.copy()
+        image = self.rgb_image.copy() # 이미지를 직접 퍼블리싱하진 않지만, YOLO 예측에 사용되므로 유지
         depth = self.depth_image.copy()
         results = self.model.predict(source=image, conf=0.5, verbose=False)[0]
 
@@ -117,6 +120,12 @@ class DetectObjectsWithTF(Node):
             try:
                 point_base = self.tf_buffer.transform(point_cam, 'base_link', timeout=rclpy.duration.Duration(seconds=0.5))
                 self.pub_point_base.publish(point_base)
+                
+                # --- 수정된 부분 시작 ---
+                class_name = self.class_names[int(class_id)] # 클래스 이름 미리 가져오기
+                
+                # base_link 정보만 포함하는 기본 로그 메시지
+                log_message = f"[{class_name}] base_link({point_base.point.x:.2f}, {point_base.point.y:.2f}, {point_base.point.z:.2f})"
 
                 try:
                     tf_base_to_map = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=0.5))
@@ -143,27 +152,37 @@ class DetectObjectsWithTF(Node):
                     marker.lifetime.sec = 1
                     marker_array.markers.append(marker)
 
-                    self.get_logger().info(f"[{self.class_names[int(class_id)]}] base_link({point_base.point.x:.2f}, {point_base.point.y:.2f}) → map({point_map.point.x:.2f}, {point_map.point.y:.2f})")
+                    # map 정보가 추가된 로그 메시지
+                    log_message += f" → map({point_map.point.x:.2f}, {point_map.point.y:.2f}, {point_map.point.z:.2f})"
 
                 except TransformException:
                     self.get_logger().warn("map 프레임 없음: base_link만 사용")
+                    # map 프레임이 없을 때 추가적으로 수행할 작업은 없으며, log_message는 base_link 정보만 가짐.
+
+                # map 프레임 여부와 관계없이 base_link 정보가 포함된 로그를 출력합니다.
+                self.get_logger().info(log_message)
+                # --- 수정된 부분 끝 ---
 
             except Exception as e:
                 self.get_logger().warn(f"TF 실패: {e}")
                 continue
 
-            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(image, f"{self.class_names[int(class_id)]} {conf:.2f}", (x1, y1 - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            # 이미지에 박스와 텍스트를 그리는 부분은 이제 /detect/yolo_distance_image 토픽 발행에 사용되지 않지만
+            # 디버깅이나 다른 용도로 필요할 수 있으므로 주석 처리하거나 필요에 따라 완전히 제거할 수 있습니다.
+            # cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # cv2.putText(image, f"{self.class_names[int(class_id)]} {conf:.2f}", (x1, y1 - 20),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         if marker_array.markers:
             self.pub_marker.publish(marker_array)
 
-        self.publish_image(image)
+        # 이미지 발행 함수 호출 제거
+        # self.publish_image(image)
 
-    def publish_image(self, image):
-        img_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
-        self.pub_image.publish(img_msg)
+    # publish_image 함수 제거
+    # def publish_image(self, image):
+    #     img_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
+    #     self.pub_image.publish(img_msg)
 
 def main(args=None):
     rclpy.init(args=args)
