@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo, CompressedImage  # CompressedImage 추가
 from geometry_msgs.msg import PointStamped
 from tf2_ros import Buffer, TransformListener
 import tf2_geometry_msgs
@@ -29,7 +29,12 @@ class DetectObjectsWithTF(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.create_subscription(Image, '/robot3/oakd/rgb/image_raw', self.rgb_callback, 10)
+        # 기존 raw 이미지 구독은 주석 처리
+        # self.create_subscription(Image, '/robot3/oakd/rgb/image_raw', self.rgb_callback, 10)
+
+        # 압축 이미지 구독 추가
+        self.create_subscription(CompressedImage, '/robot3/oakd/rgb/image_raw/compressed', self.rgb_compressed_callback, 10)
+
         self.create_subscription(Image, '/robot3/oakd/stereo/image_raw', self.depth_callback, 10)
         self.create_subscription(CameraInfo, '/robot3/oakd/stereo/camera_info', self.camera_info_callback, 10)
 
@@ -41,11 +46,19 @@ class DetectObjectsWithTF(Node):
             self.K = np.array(msg.k).reshape(3, 3)
             self.get_logger().info("CameraInfo 수신 완료")
 
+    # 기존 raw 이미지 처리 함수 (주석 처리된 구독과 연결됨)
     def rgb_callback(self, msg):
         try:
             self.rgb_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().error(f'RGB 변환 에러: {e}')
+
+    # 새로 추가된 압축 이미지 처리 함수
+    def rgb_compressed_callback(self, msg):
+        try:
+            self.rgb_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().error(f'압축 RGB 변환 에러: {e}')
 
     def depth_callback(self, msg):
         try:
