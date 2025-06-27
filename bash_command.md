@@ -8,6 +8,13 @@ rosdep install --from-path src -yi --rosdistro humble
 
 ```
 
+### 로봇 이동
+```bash
+
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot3/cmd_vel
+
+```
+
 
 ## SSH 접속
 ```bash
@@ -56,7 +63,7 @@ ros2 run rokey_pjt tf_trans --ros-args -r __ns:=/robot3 -r /tf:=/robot3/tf -r /t
 
 ros2 launch turtlebot4_navigation localization.launch.py \
   namespace:=/robot3 \
-  map:=$HOME/rokey_ws/maps/first_map.yaml \
+  map:=$HOME/rokey_ws/maps/first_map1.yaml \
   params_file:=$HOME/rokey_ws/configs/local2.yaml
 
 ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot3
