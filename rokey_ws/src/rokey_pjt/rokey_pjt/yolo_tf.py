@@ -52,11 +52,15 @@ class YOLOTFNode(Node):
                 class_name = obj['class_name']
                 frame_id = obj['frame_id']
 
+                # ✨ 추가된 로그: 수신된 frame_id 출력
+                self.get_logger().info(f"수신된 객체 정보 frame_id: '{frame_id}'")
+
                 x, y, z = self.pixel_to_3d(u, v, depth)
 
                 point_camera = PointStamped()
                 point_camera.header.frame_id = frame_id
-                point_camera.header.stamp = self.get_clock().now().to_msg()
+                # point_camera.header.stamp = self.get_clock().now().to_msg() # 원래 객체 정보의 타임스탬프를 사용하는 것이 이상적일 수 있으나, 현재 코드에서는 직접 설정
+                point_camera.header.stamp = self.get_clock().now().to_msg() # 이 부분이 중요합니다. 이 시점을 기준으로 TF를 찾습니다.
                 point_camera.point.x = z
                 point_camera.point.y = -x
                 point_camera.point.z = -y
@@ -65,18 +69,19 @@ class YOLOTFNode(Node):
                     tf = self.tf_buffer.lookup_transform(
                         'map',
                         frame_id,
-                        rclpy.time.Time(),
-                        timeout=rclpy.duration.Duration(seconds=0.5)
+                        point_camera.header.stamp, # <--- 변경됨: rclpy.time.Time() 대신 point_camera.header.stamp 사용
+                        timeout=rclpy.duration.Duration(seconds=1.0)
                     )
                     point_transformed = tf2_geometry_msgs.do_transform_point(point_camera, tf)
                     out_frame_id = 'map'
                 except TransformException as e:
                     self.get_logger().warn(f"map 프레임 변환 실패 → base_link fallback: {e}")
+                    # 이 부분도 try-except로 감싸는 것이 더 견고하지만, 요청에 따라 기존 구조를 유지합니다.
                     tf = self.tf_buffer.lookup_transform(
                         'base_link',
                         frame_id,
-                        rclpy.time.Time(),
-                        timeout=rclpy.duration.Duration(seconds=0.5)
+                        point_camera.header.stamp, # <--- 변경됨: rclpy.time.Time() 대신 point_camera.header.stamp 사용
+                        timeout=rclpy.duration.Duration(seconds=1.0)
                     )
                     point_transformed = tf2_geometry_msgs.do_transform_point(point_camera, tf)
                     out_frame_id = 'base_link'

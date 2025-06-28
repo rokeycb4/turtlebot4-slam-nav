@@ -81,7 +81,6 @@ ros2 launch turtlebot4_viz view_model.launch.py description:=true model:=standar
 
 ros2 run rokey_pjt yolo_detect
 ros2 run rokey_pjt yolo_tf
-ros2 run rokey_pjt detect_pos
 
 ```
 
