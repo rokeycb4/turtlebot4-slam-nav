@@ -1,4 +1,4 @@
-# yolo_detect.py
+# object_position.py
 
 import rclpy
 from rclpy.node import Node
