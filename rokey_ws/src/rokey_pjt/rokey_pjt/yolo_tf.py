@@ -50,12 +50,12 @@ class YOLOTFNode(Node):
                 v = obj['center_y']
                 depth = obj['distance']
                 class_name = obj['class_name']
+                frame_id = obj['frame_id']
 
                 x, y, z = self.pixel_to_3d(u, v, depth)
 
-                # PointStamped 생성
                 point_camera = PointStamped()
-                point_camera.header.frame_id = 'camera_link'
+                point_camera.header.frame_id = frame_id
                 point_camera.header.stamp = self.get_clock().now().to_msg()
                 point_camera.point.x = z
                 point_camera.point.y = -x
@@ -63,26 +63,26 @@ class YOLOTFNode(Node):
 
                 try:
                     tf = self.tf_buffer.lookup_transform(
-                        'map',  # 목적 프레임
-                        'camera_link',
+                        'map',
+                        frame_id,
                         rclpy.time.Time(),
                         timeout=rclpy.duration.Duration(seconds=0.5)
                     )
                     point_transformed = tf2_geometry_msgs.do_transform_point(point_camera, tf)
-                    frame_id = 'map'
+                    out_frame_id = 'map'
                 except TransformException as e:
                     self.get_logger().warn(f"map 프레임 변환 실패 → base_link fallback: {e}")
                     tf = self.tf_buffer.lookup_transform(
                         'base_link',
-                        'camera_link',
+                        frame_id,
                         rclpy.time.Time(),
                         timeout=rclpy.duration.Duration(seconds=0.5)
                     )
                     point_transformed = tf2_geometry_msgs.do_transform_point(point_camera, tf)
-                    frame_id = 'base_link'
+                    out_frame_id = 'base_link'
 
                 marker = Marker()
-                marker.header.frame_id = frame_id
+                marker.header.frame_id = out_frame_id
                 marker.header.stamp = self.get_clock().now().to_msg()
                 marker.ns = "objects"
                 marker.id = self.marker_id
@@ -95,27 +95,17 @@ class YOLOTFNode(Node):
                 marker.scale.y = 0.2
                 marker.scale.z = 0.2
 
-                if "enemy" in class_name:
-                    marker.color.r = 1.0
-                    marker.color.g = 0.0
-                    marker.color.b = 0.0
-                    marker.color.a = 1.0
-                elif "fr" in class_name:
-                    marker.color.r = 0.0
-                    marker.color.g = 0.0
-                    marker.color.b = 1.0
-                    marker.color.a = 1.0
-                else:
-                    marker.color.r = 0.0
-                    marker.color.g = 1.0
-                    marker.color.b = 0.0
-                    marker.color.a = 1.0
+                # ✅ 모든 마커에 동일한 색상 적용 (예: 초록색)
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+                marker.color.a = 1.0
 
                 marker.lifetime.sec = 1
                 marker_array.markers.append(marker)
 
                 self.get_logger().info(
-                    f"마커: {class_name} → ({marker.pose.position.x:.2f}, {marker.pose.position.y:.2f}, {marker.pose.position.z:.2f}) in {frame_id}"
+                    f"마커: {class_name} → ({marker.pose.position.x:.2f}, {marker.pose.position.y:.2f}, {marker.pose.position.z:.2f}) in {out_frame_id}"
                 )
 
             except Exception as e:
