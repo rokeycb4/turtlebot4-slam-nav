@@ -1,5 +1,3 @@
-# yolo_detect.py
-
 import rclpy
 from rclpy.node import Node
 
@@ -24,10 +22,10 @@ class DetectAllObjectsWithDistance(Node):
         self.rgb_image = None
         self.depth_image = None
 
-        # 클래스 ID → 이름 매핑 (YOLO 모델 내장)
+        self.rgb_frame_id = None  # ⭐️ 추가: RGB 이미지의 frame_id 저장
+
         self.class_names = getattr(self.model, 'names', [])
 
-        # self.create_subscription(Image, '/robot3/oakd/rgb/image_raw', self.rgb_callback, 10)  # 기존 raw 구독은 비활성화
         self.create_subscription(CompressedImage, '/robot3/oakd/rgb/image_raw/compressed', self.rgb_compressed_callback, 10)
         self.create_subscription(Image, '/robot3/oakd/stereo/image_raw', self.depth_callback, 10)
         self.create_subscription(CameraInfo, '/robot3/oakd/stereo/camera_info', self.camera_info_callback, 10)
@@ -41,15 +39,10 @@ class DetectAllObjectsWithDistance(Node):
             self.K = np.array(msg.k).reshape(3, 3)
             self.get_logger().info("CameraInfo 수신 완료")
 
-    def rgb_callback(self, msg):
-        try:
-            self.rgb_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        except Exception as e:
-            self.get_logger().error(f'RGB 변환 에러: {e}')
-
     def rgb_compressed_callback(self, msg):
         try:
             self.rgb_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            self.rgb_frame_id = msg.header.frame_id  # ⭐️ 여기서 frame_id 저장!
         except Exception as e:
             self.get_logger().error(f'압축 RGB 변환 에러: {e}')
 
@@ -60,7 +53,7 @@ class DetectAllObjectsWithDistance(Node):
             self.get_logger().error(f'Depth 변환 에러: {e}')
 
     def process_image(self):
-        if self.rgb_image is None or self.depth_image is None or self.K is None:
+        if self.rgb_image is None or self.depth_image is None or self.K is None or self.rgb_frame_id is None:
             return
 
         image = self.rgb_image.copy()
@@ -97,10 +90,11 @@ class DetectAllObjectsWithDistance(Node):
                 'confidence': float(conf),
                 'center_x': int(u),
                 'center_y': int(v),
-                'distance': float(distance_m)
+                'distance': float(distance_m),
+                'frame_id': self.rgb_frame_id  # ⭐️ 여기서 포함!
             })
 
-            self.get_logger().info(f"[{class_name}] conf={conf:.2f} at ({u},{v}) → {distance_m:.2f}m")
+            self.get_logger().info(f"[{class_name}] conf={conf:.2f} at ({u},{v}) → {distance_m:.2f}m frame_id={self.rgb_frame_id}")
 
         self.publish_image(image)
         

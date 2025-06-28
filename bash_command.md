@@ -76,6 +76,9 @@ ros2 run rokey_pjt tf_trans --ros-args -r __ns:=/robot3 -r /tf:=/robot3/tf -r /t
 ## depth + TF transform
 ```bash
 
+# 프레임 확인
+ros2 launch turtlebot4_viz view_model.launch.py description:=true model:=standard
+
 ros2 run rokey_pjt yolo_detect
 ros2 run rokey_pjt yolo_tf
 ros2 run rokey_pjt detect_pos
