@@ -76,9 +76,8 @@ ros2 run rokey_pjt tf_trans --ros-args -r __ns:=/robot3 -r /tf:=/robot3/tf -r /t
 ## depth + TF transform
 ```bash
 
-ros2 run rokey_pjt yolo_detect
-ros2 run rokey_pjt yolo_tf
-ros2 run rokey_pjt detect_pos
+ros2 run rokey_pjt yolo_detectros2 run rokey_pjt yolo_tf
+
 
 ```
 
