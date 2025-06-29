@@ -1,5 +1,3 @@
-## yolo_tf.py
-
 import rclpy
 from rclpy.node import Node
 

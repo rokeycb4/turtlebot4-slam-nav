@@ -1,3 +1,5 @@
+# yolo_detect.py
+
 import rclpy
 from rclpy.node import Node
 
@@ -13,7 +15,7 @@ class DetectAllObjectsWithDistance(Node):
     def __init__(self):
         super().__init__('detect_all_objects_with_distance')
 
-        self.model_path = '/home/rokey/rokey_ws/src/yolov8_ros/yolov8_ros/best.pt'
+        self.model_path = '/home/rokey/rokey_ws/park_area.pt'
         self.model = YOLO(self.model_path)
         self.get_logger().info(f"YOLO 모델 로딩 완료: {self.model_path}")
 

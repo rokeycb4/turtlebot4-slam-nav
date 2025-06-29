@@ -1,3 +1,5 @@
+import os # os 모듈 임포트
+from glob import glob # glob 모듈 임포트
 from setuptools import find_packages, setup
 
 package_name = 'rokey_pjt'
@@ -10,6 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        # 🚀 수정된 부분: '.launch.py' 파일들을 정확하게 포함하도록 glob 패턴 수정
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.py'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
