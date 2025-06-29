@@ -1,3 +1,5 @@
+# yolo_detect.py
+
 import rclpy
 from rclpy.node import Node
 
@@ -76,8 +78,8 @@ class DetectAllObjectsWithDistance(Node):
             if not (0 <= u < depth.shape[1] and 0 <= v < depth.shape[0]):
                 continue
 
-            # ROI 기반 거리 추정
-            roi_size = 5  # 5x5 영역
+            # ROI 기반 거리 추정 (3x3)
+            roi_size = 3  # 3x3 영역으로 변경
             x_start = max(0, u - roi_size // 2)
             x_end = min(depth.shape[1], u + roi_size // 2 + 1)
             y_start = max(0, v - roi_size // 2)
