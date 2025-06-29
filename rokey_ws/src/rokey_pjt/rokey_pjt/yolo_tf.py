@@ -1,130 +1,138 @@
 import rclpy
 from rclpy.node import Node
-
-import cv2
 import numpy as np
-from sensor_msgs.msg import Image, CameraInfo, CompressedImage
-from cv_bridge import CvBridge
-from ultralytics import YOLO
-from std_msgs.msg import String
 import json
 
-class DetectAllObjectsWithDistance(Node):
+from sensor_msgs.msg import CameraInfo
+from geometry_msgs.msg import PointStamped
+from visualization_msgs.msg import Marker, MarkerArray
+from std_msgs.msg import String
+import tf2_ros
+import tf2_geometry_msgs
+from tf2_ros import TransformException
+
+class YOLOTFNode(Node):
     def __init__(self):
-        super().__init__('detect_all_objects_with_distance')
+        super().__init__('yolo_tf_node')
 
-        self.model_path = '/home/rokey/rokey_ws/park_area.pt'
-        self.model = YOLO(self.model_path)
-        self.get_logger().info(f"YOLO 모델 로딩 완료: {self.model_path}")
-
-        self.bridge = CvBridge()
         self.K = None
-        self.rgb_image = None
-        self.depth_image = None
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        self.rgb_frame_id = None
-
-        self.class_names = getattr(self.model, 'names', [])
-
-        self.create_subscription(CompressedImage, '/robot3/oakd/rgb/image_raw/compressed', self.rgb_compressed_callback, 10)
-        self.create_subscription(Image, '/robot3/oakd/stereo/image_raw', self.depth_callback, 10)
         self.create_subscription(CameraInfo, '/robot3/oakd/stereo/camera_info', self.camera_info_callback, 10)
+        self.create_subscription(String, '/detect/object_info', self.object_info_callback, 10)
 
-        self.pub_image = self.create_publisher(Image, '/detect/yolo_distance_image', 10)
-        self.pub_objects = self.create_publisher(String, '/detect/object_info', 10)
-        self.timer = self.create_timer(0.1, self.process_image)
+        self.marker_pub = self.create_publisher(MarkerArray, '/object_markers', 10)
+
+        self.marker_id = 0
 
     def camera_info_callback(self, msg):
         if self.K is None:
             self.K = np.array(msg.k).reshape(3, 3)
             self.get_logger().info("CameraInfo 수신 완료")
 
-    def rgb_compressed_callback(self, msg):
-        try:
-            self.rgb_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            self.rgb_frame_id = msg.header.frame_id
-        except Exception as e:
-            self.get_logger().error(f'압축 RGB 변환 에러: {e}')
-
-    def depth_callback(self, msg):
-        try:
-            self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-        except Exception as e:
-            self.get_logger().error(f'Depth 변환 에러: {e}')
-
-    def process_image(self):
-        if self.rgb_image is None or self.depth_image is None or self.K is None or self.rgb_frame_id is None:
+    def object_info_callback(self, msg):
+        if self.K is None:
+            self.get_logger().warn("CameraInfo 미수신. 변환 불가.")
             return
 
-        image = self.rgb_image.copy()
-        depth = self.depth_image.copy()
-        results = self.model.predict(source=image, conf=0.7, verbose=False)[0]
-
-        boxes = results.boxes.xyxy.cpu().numpy()
-        confidences = results.boxes.conf.cpu().numpy()
-        class_ids = results.boxes.cls.cpu().numpy()
-        
-        object_info = []
-
-        for idx in range(len(boxes)):
-            x1, y1, x2, y2 = boxes[idx].astype(int)
-            conf = confidences[idx]
-            class_id = int(class_ids[idx])
-            class_name = self.class_names[class_id] if class_id < len(self.class_names) else str(class_id)
-
-            u, v = (x1 + x2) // 2, (y1 + y2) // 2
-            if not (0 <= u < depth.shape[1] and 0 <= v < depth.shape[0]):
-                continue
-
-            val = depth[v, u]
-            distance_m = val / 1000.0 if depth.dtype == np.uint16 else float(val)
-
-            # 픽셀 좌표와 깊이를 3D 카메라 좌표로 변환
-            x, y, z = self.pixel_to_3d(u, v, distance_m)
-
-            # 🚀 이 부분이 OAK-D 카메라 광학 프레임 기준의 x, y, z 값을 출력하는 로그입니다.
-            self.get_logger().info(
-                f"OAK-D 광학 프레임 원시 좌표 ({class_name}): x={x:.3f}, y={y:.3f}, z={z:.3f}"
-            )
-            # -------------------------------------------------------------
-
-            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(image, f"{class_name} {conf:.2f}", (x1, y1 - 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            cv2.putText(image, f"{distance_m:.2f}m", (x1, y1 - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-
-            object_info.append({
-                'class_name': class_name,
-                'confidence': float(conf),
-                'center_x': int(u),
-                'center_y': int(v),
-                'distance': float(distance_m),
-                'frame_id': self.rgb_frame_id
-            })
-
-            self.get_logger().info(f"[{class_name}] conf={conf:.2f} at ({u},{v}) → {distance_m:.2f}m frame_id={self.rgb_frame_id}")
-
-        self.publish_image(image)
-        
-        if object_info:
-            self.publish_object_info(object_info)
-
-    def publish_image(self, image):
         try:
-            img_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
-            self.pub_image.publish(img_msg)
+            objects = json.loads(msg.data)
         except Exception as e:
-            self.get_logger().error(f"이미지 퍼블리시 에러: {e}")
-    
-    def publish_object_info(self, object_info):
-        try:
-            json_str = json.dumps(object_info)
-            msg = String()
-            msg.data = json_str
-            self.pub_objects.publish(msg)
-        except Exception as e:
-            self.get_logger().error(f"객체 정보 퍼블리시 에러: {e}")
+            self.get_logger().error(f"객체 정보 파싱 실패: {e}")
+            return
+
+        marker_array = MarkerArray()
+
+        for obj in objects:
+            try:
+                u = obj['center_x']
+                v = obj['center_y']
+                depth = obj['distance']
+                class_name = obj['class_name']
+                frame_id = obj['frame_id']
+
+                self.get_logger().info(f"수신된 객체 정보 frame_id: '{frame_id}'")
+
+                x, y, z = self.pixel_to_3d(u, v, depth)
+
+                self.get_logger().info(
+                    f"OAK-D 광학 프레임 원시 좌표 ({class_name}): x={x:.3f}, y={y:.3f}, z={z:.3f}"
+                ) # yolo_detect.py에 있던 이 로그를 yolo_tf.py로 옮겨옴 (확인용)
+
+
+                point_camera = PointStamped()
+                point_camera.header.frame_id = frame_id
+                
+                # 🚀 새로운 매핑 시도: 로봇 오른쪽으로 가는 문제 해결
+                # OAK-D 원시: X-right, Y-down, Z-forward
+                # ROS 표준 로봇: X-forward, Y-left, Z-up
+                
+                # ROS X (전방) <-> OAK-D Z (깊이)
+                point_camera.point.x = z 
+                
+                # ROS Y (왼쪽) <-> OAK-D X (오른쪽)
+                # OAK-D X가 양수일 때 ROS Y가 양수가 되어야 왼쪽으로 감
+                # OAK-D X가 음수일 때 ROS Y가 음수가 되어야 오른쪽으로 감
+                # 현재 문제가 "정면에 있는데 마커가 오른쪽으로 감" (base_link Y음수) 이므로
+                # OAK-D x가 음수일 때 (카메라 기준 왼쪽) ROS Y도 음수가 되게 x를 그대로 씁니다.
+                point_camera.point.y = x  # <-- 이 부분 변경 (이전에 시도했던 조합이지만, 진단 기반으로 다시 시도)
+                
+                # ROS Z (위쪽) <-> OAK-D Y (아래쪽)
+                # OAK-D Y는 아래쪽이 양수, 위쪽이 음수이므로 부호 반전
+                point_camera.point.z = -y 
+
+                try:
+                    tf = self.tf_buffer.lookup_transform(
+                        'map',
+                        frame_id,
+                        rclpy.time.Time(), 
+                        timeout=rclpy.duration.Duration(seconds=1.0)
+                    )
+                    point_transformed = tf2_geometry_msgs.do_transform_point(point_camera, tf)
+                    out_frame_id = 'map'
+                except TransformException as e:
+                    self.get_logger().warn(f"map 프레임 변환 실패 → base_link fallback: {e}")
+                    tf = self.tf_buffer.lookup_transform(
+                        'base_link',
+                        frame_id,
+                        rclpy.time.Time(), 
+                        timeout=rclpy.duration.Duration(seconds=1.0)
+                    )
+                    point_transformed = tf2_geometry_msgs.do_transform_point(point_camera, tf)
+                    out_frame_id = 'base_link'
+
+                marker = Marker()
+                marker.header.frame_id = out_frame_id
+                marker.header.stamp = self.get_clock().now().to_msg()
+                marker.ns = "objects"
+                marker.id = self.marker_id
+                self.marker_id += 1
+                marker.type = Marker.SPHERE
+                marker.action = Marker.ADD
+                marker.pose.position = point_transformed.point
+                marker.pose.orientation.w = 1.0
+                marker.scale.x = 0.2
+                marker.scale.y = 0.2
+                marker.scale.z = 0.2
+
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+                marker.color.a = 1.0
+
+                marker.lifetime.sec = 1
+                marker_array.markers.append(marker)
+
+                self.get_logger().info(
+                    f"마커: {class_name} → ({marker.pose.position.x:.2f}, {marker.pose.position.y:.2f}, {marker.pose.position.z:.2f}) in {out_frame_id}"
+                )
+
+            except Exception as e:
+                self.get_logger().error(f"객체 처리 실패: {e}")
+
+        if marker_array.markers:
+            self.marker_pub.publish(marker_array)
 
     def pixel_to_3d(self, u, v, depth):
         fx = self.K[0, 0]
@@ -139,7 +147,7 @@ class DetectAllObjectsWithDistance(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = DetectAllObjectsWithDistance()
+    node = YOLOTFNode()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
