@@ -82,7 +82,7 @@ class DetectAllObjectsWithDistance(Node):
             # 픽셀 좌표와 깊이를 3D 카메라 좌표로 변환
             x, y, z = self.pixel_to_3d(u, v, distance_m)
 
-            # 🚀 추가된 로그: OAK-D 카메라 광학 프레임 기준의 x, y, z 값 출력
+            # 🚀 이 부분이 OAK-D 카메라 광학 프레임 기준의 x, y, z 값을 출력하는 로그입니다.
             self.get_logger().info(
                 f"OAK-D 광학 프레임 원시 좌표 ({class_name}): x={x:.3f}, y={y:.3f}, z={z:.3f}"
             )
