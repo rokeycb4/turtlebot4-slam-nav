@@ -1,5 +1,3 @@
-# yolo_detect.py
-
 import rclpy
 from rclpy.node import Node
 
@@ -24,7 +22,7 @@ class DetectAllObjectsWithDistance(Node):
         self.rgb_image = None
         self.depth_image = None
 
-        self.rgb_frame_id = None  # ⭐️ 추가: RGB 이미지의 frame_id 저장
+        self.rgb_frame_id = None  # RGB 이미지의 frame_id 저장
 
         self.class_names = getattr(self.model, 'names', [])
 
@@ -44,7 +42,7 @@ class DetectAllObjectsWithDistance(Node):
     def rgb_compressed_callback(self, msg):
         try:
             self.rgb_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            self.rgb_frame_id = msg.header.frame_id  # ⭐️ 여기서 frame_id 저장!
+            self.rgb_frame_id = msg.header.frame_id
         except Exception as e:
             self.get_logger().error(f'압축 RGB 변환 에러: {e}')
 
@@ -78,8 +76,28 @@ class DetectAllObjectsWithDistance(Node):
             if not (0 <= u < depth.shape[1] and 0 <= v < depth.shape[0]):
                 continue
 
-            val = depth[v, u]
-            distance_m = val / 1000.0 if depth.dtype == np.uint16 else float(val)
+            # ROI 기반 거리 추정
+            roi_size = 5  # 5x5 영역
+            x_start = max(0, u - roi_size // 2)
+            x_end = min(depth.shape[1], u + roi_size // 2 + 1)
+            y_start = max(0, v - roi_size // 2)
+            y_end = min(depth.shape[0], v + roi_size // 2 + 1)
+
+            roi = depth[y_start:y_end, x_start:x_end].astype(np.float32)
+
+            # 무효값 제외 (0 또는 NaN)
+            roi_valid = roi[(roi > 0) & np.isfinite(roi)]
+
+            if roi_valid.size > 0:
+                distance_m = np.median(roi_valid) / 1000.0 if depth.dtype == np.uint16 else float(np.median(roi_valid))
+            else:
+                self.get_logger().warn(f"[{class_name}] 유효한 Depth 없음 → 건너뜀: ({u},{v})")
+                continue
+
+            # 유효 거리 범위 검사 (예: 0.3~4.0m)
+            if distance_m < 0.3 or distance_m > 4.0:
+                self.get_logger().warn(f"[{class_name}] 거리 범위 초과: {distance_m:.2f}m")
+                continue
 
             cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(image, f"{class_name} {conf:.2f}", (x1, y1 - 25),
@@ -93,7 +111,7 @@ class DetectAllObjectsWithDistance(Node):
                 'center_x': int(u),
                 'center_y': int(v),
                 'distance': float(distance_m),
-                'frame_id': self.rgb_frame_id  # ⭐️ 여기서 포함!
+                'frame_id': self.rgb_frame_id
             })
 
             self.get_logger().info(f"[{class_name}] conf={conf:.2f} at ({u},{v}) → {distance_m:.2f}m frame_id={self.rgb_frame_id}")
