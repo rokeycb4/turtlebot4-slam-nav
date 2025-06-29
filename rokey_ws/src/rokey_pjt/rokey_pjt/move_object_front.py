@@ -1,11 +1,14 @@
-# parking_node.py
+# move_object_front.py
 
 import rclpy
 from rclpy.node import Node
+import numpy as np
 import json
 
 from geometry_msgs.msg import Twist, PointStamped
 from std_msgs.msg import String
+from sensor_msgs.msg import CameraInfo
+
 import tf2_ros
 import tf2_geometry_msgs
 from tf2_ros import TransformException
@@ -17,7 +20,12 @@ class AutoParkingNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        self.subscription = self.create_subscription(
+        self.K = None  # CameraInfo로 채움
+
+        self.create_subscription(
+            CameraInfo, '/robot3/oakd/stereo/camera_info', self.camera_info_callback, 10)
+
+        self.create_subscription(
             String, '/detect/object_info', self.object_info_callback, 10)
 
         self.cmd_vel_pub = self.create_publisher(Twist, '/robot3/cmd_vel', 10)
@@ -26,7 +34,16 @@ class AutoParkingNode(Node):
         self.target_point = None
         self.is_parking = False
 
+    def camera_info_callback(self, msg):
+        if self.K is None:
+            self.K = np.array(msg.k).reshape(3, 3)
+            self.get_logger().info("CameraInfo 수신 완료")
+
     def object_info_callback(self, msg):
+        if self.K is None:
+            self.get_logger().warn("CameraInfo 미수신 상태. 변환 불가.")
+            return
+
         if self.is_parking:
             self.get_logger().info("이미 주차 진행 중 → 새 객체 무시")
             return
@@ -40,7 +57,6 @@ class AutoParkingNode(Node):
             u, v, distance = obj['center_x'], obj['center_y'], obj['distance']
             frame_id = obj['frame_id']
 
-            # 픽셀 + 거리 → OAK-D 카메라 좌표 → PointStamped
             x, y, z = self.pixel_to_3d(u, v, distance)
 
             point_camera = PointStamped()
@@ -49,7 +65,6 @@ class AutoParkingNode(Node):
             point_camera.point.y = y
             point_camera.point.z = z
 
-            # TF: base_link로 변환
             try:
                 tf = self.tf_buffer.lookup_transform(
                     'base_link', frame_id,
@@ -60,7 +75,7 @@ class AutoParkingNode(Node):
 
                 self.get_logger().info(f"객체 base_link: ({point_base.point.x:.2f}, {point_base.point.y:.2f})")
 
-                # ➡️ 50cm 앞 좌표 계산 (base_link X축)
+                # 객체로부터 50cm 앞
                 target_x = point_base.point.x - 0.5
                 target_y = point_base.point.y
 
@@ -76,9 +91,10 @@ class AutoParkingNode(Node):
             self.get_logger().error(f"JSON 파싱 실패: {e}")
 
     def pixel_to_3d(self, u, v, depth):
-        # 카메라 내부 파라미터는 /camera_info 로 받아서 초기화돼 있다고 가정
-        fx, fy = 600.0, 600.0  # 예시값, 실제 CameraInfo 사용!
-        cx, cy = 320.0, 240.0
+        fx = self.K[0, 0]
+        fy = self.K[1, 1]
+        cx = self.K[0, 2]
+        cy = self.K[1, 2]
 
         x = (u - cx) * depth / fx
         y = (v - cy) * depth / fy
@@ -90,20 +106,18 @@ class AutoParkingNode(Node):
             return
 
         target_x, target_y = self.target_point
-
         distance = (target_x**2 + target_y**2)**0.5
-
-        self.get_logger().info(f"남은 거리: {distance:.3f} m")
 
         twist = Twist()
         if distance > 0.05:
-            twist.linear.x = 0.2  # 단순 전진 속도
-            twist.angular.z = -1.0 * target_y  # 간단한 방향 보정
+            twist.linear.x = 0.2
+            twist.angular.z = -1.0 * target_y  # 간단한 y축 offset 조향
         else:
             twist.linear.x = 0.0
             twist.angular.z = 0.0
             self.is_parking = False
             self.get_logger().info("목표점 도달! 이동 종료")
+            self.cmd_vel_pub.publish(twist)
 
         self.cmd_vel_pub.publish(twist)
 
