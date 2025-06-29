@@ -86,3 +86,12 @@ ros2 launch rokey_pjt yolo_tf.launch.py
 
 ```
 
+## 검출 좌표로 이동
+```bash
+ros2 run rokey_pjt yolo_detect
+
+ros2 run rokey_pjt move_object_front
+
+
+
+```
