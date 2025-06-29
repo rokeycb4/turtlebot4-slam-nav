@@ -30,6 +30,9 @@ setup(
         'yolo_tf = rokey_pjt.yolo_tf:main',
         'yolo_detect = rokey_pjt.yolo_detect:main',
         'detect_pos = rokey_pjt.object_position:main',
+
+        'move_forward = rokey_pjt.move_forward:main',
+
         ],
     },
 )
