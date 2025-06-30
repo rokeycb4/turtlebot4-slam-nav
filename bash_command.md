@@ -42,6 +42,9 @@ gnome-system-monitor
 
 ## Robot_TF Transform
 ```bash
+#sudo apt update
+#sudo apt install ros-humble-irobot-create-control
+
 ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/github_package/turtlebot4-slam-nav/turtlebot4_ws/maps/first_map.yaml
 
 
@@ -100,6 +103,7 @@ ros2 run rokey_pjt move_object_front
 sudo apt install fonts-noto-cjk
 
 ros2 run rokey_pjt carplate_ocr
+ros2 run rokey_pjt detect_car_info
 
 
 ```
