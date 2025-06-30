@@ -15,6 +15,8 @@ import os
 import sys
 
 MODEL_PATH = '/home/kiwi/rokey_ws/car_plate1.pt'
+MODEL_PATH = '/home/kiwi/rokey_ws/car_plate1.pt'
+
 RGB_TOPIC = '/robot3/oakd/rgb/image_raw'
 CONF = 0.5
 PROCESS_INTERVAL_SEC = 0.2
