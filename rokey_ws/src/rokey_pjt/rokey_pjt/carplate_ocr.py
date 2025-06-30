@@ -17,13 +17,9 @@ import numpy as np
 import os
 import sys
 
-<<<<<<< HEAD
 MODEL_PATH = '/home/kiwi/rokey_ws/car_plate1.pt'
-MODEL_PATH = '/home/kiwi/rokey_ws/car_plate1.pt'
+# MODEL_PATH = '/home/kiwi/rokey_ws/car_plate1.pt'
 
-=======
-MODEL_PATH = '/home/kiwi/rokey_ws/car_plate2.pt'
->>>>>>> 190b6923cabba92175a9cf61722d6a846588dba8
 RGB_TOPIC = '/robot3/oakd/rgb/image_raw'
 CONF = 0.5
 PROCESS_INTERVAL_SEC = 0.2

@@ -93,16 +93,16 @@ ros2 launch rokey_pjt yolo_tf.launch.py
 ```bash
 ros2 run rokey_pjt yolo_detect
 
-ros2 run rokey_pjt move_object_front
-
+# ros2 run rokey_pjt move_object_front
+ros2 launch rokey_pjt move_object_front.launch.py
 ```
 
 
 ## ocr
 ```bash
-sudo apt install fonts-noto-cjk
+# sudo apt install fonts-noto-cjk
 
-ros2 run rokey_pjt carplate_ocr
+# ros2 run rokey_pjt carplate_ocr
 ros2 run rokey_pjt detect_car_info
 
 

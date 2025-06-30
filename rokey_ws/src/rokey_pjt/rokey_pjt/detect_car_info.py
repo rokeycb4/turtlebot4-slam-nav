@@ -19,6 +19,9 @@ import sys
 import json
 
 MODEL_PATH = '/home/kiwi/github_package/turtlebot4-slam-nav/rokey_ws/car_plate2.pt'
+MODEL_PATH = '/home/rokey/github_package/turtlebot4-slam-nav/rokey_ws/car_plate2.pt'
+
+
 RGB_TOPIC = '/robot3/oakd/rgb/image_raw'
 CONF = 0.5
 PROCESS_INTERVAL_SEC = 0.2
