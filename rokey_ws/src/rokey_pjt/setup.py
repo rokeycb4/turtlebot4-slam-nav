@@ -33,6 +33,7 @@ setup(
 
         'move_forward = rokey_pjt.move_forward:main',
         'move_object_front = rokey_pjt.move_object_front:main',
+        'carplate_ocr = rokey_pjt.carplate_ocr:main',
 
         ],
     },
