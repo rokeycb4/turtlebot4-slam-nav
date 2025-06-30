@@ -92,6 +92,13 @@ ros2 run rokey_pjt yolo_detect
 
 ros2 run rokey_pjt move_object_front
 
+```
+
+
+## ocr
+```bash
+
+ros2 run rokey_pjt carplate_ocr
 
 
 ```
