@@ -97,6 +97,7 @@ ros2 run rokey_pjt move_object_front
 
 ## ocr
 ```bash
+sudo apt install fonts-noto-cjk
 
 ros2 run rokey_pjt carplate_ocr
 
