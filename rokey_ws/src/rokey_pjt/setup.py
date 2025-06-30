@@ -32,6 +32,7 @@ setup(
         'detect_pos = rokey_pjt.object_position:main',
 
         'move_forward = rokey_pjt.move_forward:main',
+        'move_object_front = rokey_pjt.move_object_front:main',
 
         ],
     },
