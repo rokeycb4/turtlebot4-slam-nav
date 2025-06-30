@@ -110,7 +110,7 @@ class AutoParkingNode(Node):
 
         twist = Twist()
         if distance > 0.05:
-            twist.linear.x = 0.2
+            twist.linear.x = 0.05
             twist.angular.z = -1.0 * target_y  # 간단한 y축 offset 조향
         else:
             twist.linear.x = 0.0
