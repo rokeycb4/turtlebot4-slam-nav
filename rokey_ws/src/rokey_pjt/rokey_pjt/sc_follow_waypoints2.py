@@ -427,6 +427,8 @@ class ParkingLocationCommander(Node):
         self.go_to_pose_blocking(target_pose, f"주차 위치: {location}")
         time.sleep(3)
 
+        
+
 
 
 def main():
