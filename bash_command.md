@@ -95,6 +95,11 @@ ros2 run rokey_pjt yolo_detect
 
 # ros2 run rokey_pjt move_object_front
 ros2 launch rokey_pjt move_object_front.launch.py
+
+
+ros2 launch rokey_pjt move_object_front.launch.py
+ros2 launch rokey_pjt detect_ps_map.launch.py
+
 ```
 
 
