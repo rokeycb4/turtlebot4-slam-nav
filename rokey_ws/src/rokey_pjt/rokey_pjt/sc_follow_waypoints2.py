@@ -243,6 +243,8 @@ if __name__ == '__main__':
 #!/usr/bin/env python3
 #!/usr/bin/env python3
 
+# ros2 run rokey_pjt sc_follow_waypoints2  --ros-args -r __ns:=/robot2
+
 
 # sc_follow_waypoints.py
 
@@ -256,6 +258,7 @@ from nav2_simple_commander.robot_navigator import BasicNavigator
 from turtlebot4_navigation.turtlebot4_navigator import TurtleBot4Navigator
 from tf_transformations import quaternion_from_euler
 import time
+from rclpy.qos import qos_profile_sensor_data
 
 def create_pose(x, y, yaw_deg, navigator):
     pose = PoseStamped()
@@ -294,10 +297,7 @@ class ParkingLocationCommander(Node):
 
         # 위치 상수
         self.initial_xyyaw = (-0.02, -0.02, 0.0)
-        self.wait_xyyaw = (-1.03, -0.02, 180.0)
-
-        # 객체 맵 좌표 초기화
-        self.parking_coord = None
+        self.wait_xyyaw = (-1.03, -0.02, 0.0)
 
         # Nav2 활성화 대기
         #self.navigator.waitUntilNav2Active()
@@ -311,9 +311,6 @@ class ParkingLocationCommander(Node):
             self.dock_navigator.undock()
             time.sleep(2.0)
 
-        # 대기 지점으로 이동
-        self.go_to_wait_pose()
-
         # 명령 구독 시작
         self.subscription = self.create_subscription(
             String,
@@ -323,16 +320,18 @@ class ParkingLocationCommander(Node):
         )
         self.get_logger().info('✅ Subscribed to /parking/location - Ready for commands!')
 
+        # 객체 맵 좌표 초기화
+        self.parking_coord = None
         # ✅ 추가: 객체 맵 좌표계 PoseStamped 구독
         self.create_subscription(
             PoseStamped,
             '/detect/object_map_pose',
             self.object_map_pose_callback,
-            10
+            qos_profile_sensor_data
         )
         self.get_logger().info('✅ Subscribed to /detect/object_map_pose - Listening!')
 
-    def object_map_pose_callback(self, msg: PoseStamped):
+    def object_map_pose_callback(self, msg):
         # ✅ 수신된 PoseStamped 정보 → 멤버 변수로 저장
         self.parking_coord = (
             msg.pose.position.x,
@@ -342,6 +341,38 @@ class ParkingLocationCommander(Node):
         self.get_logger().info(
             f"📍 Received object map pose: x={msg.pose.position.x:.2f}, y={msg.pose.position.y:.2f}, z={msg.pose.position.z:.2f}"
         )
+
+        self.get_logger().info(f"주차위치: {self.parking_coord}")
+
+        # (추가) 객체 기반 주차
+        if self.parking_coord:
+            self.get_logger().warn("====================주차 시작")
+
+
+            obj_x = self.parking_coord[0]
+            obj_y = self.parking_coord[1]
+            obj_yaw = 0.0  # 필요하다면 orientation에서 yaw 계산해서 쓸 수 있음
+            obj_pose = create_pose(obj_x, obj_y, obj_yaw, self.navigator)
+            self.go_to_pose_blocking(obj_pose, "객체 기반 주차 위치")
+            time.sleep(2)
+            self.get_logger().warn("====================주차 완료")
+
+
+        else:
+            self.get_logger().warn("⚠️ 객체 맵 좌표가 아직 수신되지 않아 객체 주차를 건너뜀")
+
+        # 2️⃣ 초기 위치로 복귀
+        initial_pose = create_pose(*self.initial_xyyaw, self.navigator)
+        self.go_to_pose_blocking(initial_pose, "초기 위치 복귀 (-0.02, -0.02)")
+
+        # 3️⃣ 초기 위치에서 도킹 요청
+        self.get_logger().info('🚀 초기 위치 도착 → 도킹 요청 시작')
+        self.dock_navigator.dock()
+        self.get_logger().info('✅ 도킹 요청 완료')
+
+        self.get_logger().info('✅ Ready for next /parking/location command!')
+
+
 
     def go_to_pose_blocking(self, pose, description):
         self.get_logger().info(f"🚀 이동 시작: {description}")
@@ -376,9 +407,13 @@ class ParkingLocationCommander(Node):
 
     def go_to_wait_pose(self):
         wait_pose = create_pose(*self.wait_xyyaw, self.navigator)
-        self.go_to_pose_blocking(wait_pose, "대기 지점 (-0.02, -1.20)")
+        self.go_to_pose_blocking(wait_pose, "대기 지점 (-1.03, -0.02)")
 
     def location_callback(self, msg):
+
+        # 대기 지점으로 이동
+        self.go_to_wait_pose()
+
         location = msg.data.strip()
         self.get_logger().info(f"📌 Received parking command: {location}")
 
@@ -390,27 +425,9 @@ class ParkingLocationCommander(Node):
         x, y, yaw = self.location_map[location]
         target_pose = create_pose(x, y, yaw, self.navigator)
         self.go_to_pose_blocking(target_pose, f"주차 위치: {location}")
+        time.sleep(3)
 
-        # (추가) 객체 기반 주차
-        if self.parking_coord:
-            obj_x = self.parking_coord[0]
-            obj_y = self.parking_coord[1]
-            obj_yaw = 0.0  # 필요하다면 orientation에서 yaw 계산해서 쓸 수 있음
-            obj_pose = create_pose(obj_x, obj_y, obj_yaw, self.navigator)
-            self.go_to_pose_blocking(obj_pose, "객체 기반 주차 위치")
-        else:
-            self.get_logger().warn("⚠️ 객체 맵 좌표가 아직 수신되지 않아 객체 주차를 건너뜀")
 
-        # 2️⃣ 초기 위치로 복귀
-        initial_pose = create_pose(*self.initial_xyyaw, self.navigator)
-        self.go_to_pose_blocking(initial_pose, "초기 위치 복귀 (-0.02, -0.02)")
-
-        # 3️⃣ 초기 위치에서 도킹 요청
-        self.get_logger().info('🚀 초기 위치 도착 → 도킹 요청 시작')
-        self.dock_navigator.dock()
-        self.get_logger().info('✅ 도킹 요청 완료')
-
-        self.get_logger().info('✅ Ready for next /parking/location command!')
 
 def main():
     rclpy.init()

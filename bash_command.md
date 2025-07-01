@@ -84,10 +84,7 @@ ros2 run rokey_pjt tf_trans --ros-args -r __ns:=/robot3 -r /tf:=/robot3/tf -r /t
 ```bash
 # 홈위치
 
-ros2 launch turtlebot4_navigation localization.launch.py \
-  namespace:=/robot3 \
-  map:=$HOME/rokey_ws/maps/first_map1.yaml \
-  params_file:=$HOME/rokey_ws/configs/local2.yaml
+ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/rokey_ws/maps/first_map.yaml
 
 ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot3
 
