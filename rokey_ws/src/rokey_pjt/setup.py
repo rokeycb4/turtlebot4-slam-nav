@@ -36,6 +36,9 @@ setup(
         'carplate_ocr = rokey_pjt.carplate_ocr:main',
         'detect_car_info = rokey_pjt.detect_car_info:main',
 
+        'detect_ps_map = rokey_pjt.detect_ps_map:main',
+
+
         ],
     },
 )
