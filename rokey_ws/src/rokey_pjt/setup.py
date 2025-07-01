@@ -37,7 +37,7 @@ setup(
         'detect_car_info = rokey_pjt.detect_car_info:main',
 
         'detect_ps_map = rokey_pjt.detect_ps_map:main',
-
+        'detect_ps_front = rokey_pjt.detect_ps_front:main',
 
         ],
     },
