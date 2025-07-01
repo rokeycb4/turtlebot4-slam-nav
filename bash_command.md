@@ -129,3 +129,14 @@ ros2 run rokey_pjt detect_car_info
 
 
 ```
+
+
+
+## bashrc
+```bash
+alias local='ros2 launch turtlebot4_navigation localization.launch.py   namespace:=/robot2   map:=$HOME/rokey_ws/maps/first_map1.yaml   params_file:=$HOME/rokey_ws/config/local2.yaml'
+alias rv='ros2 launch turtlebot4_viz view_robot.launch.py namespace:=/robot2'
+alias navi='ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot2 params_file:=$HOME/rokey_ws/config/nav2_net2.yaml'
+alias way='ros2 run rokey_pjt sc_follow_waypoints --ros-args -r __ns:=/robot2' 
+
+```
