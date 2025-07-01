@@ -8,6 +8,26 @@ rosdep install --from-path src -yi --rosdistro humble
 
 ```
 
+## USER PC Network Setup
+```bash
+wget -qO - https://raw.githubusercontent.com/turtlebot/turtlebot4_setup/humble/turtlebot4_discovery/configure_discovery.sh | bash <(cat) </dev/tty
+
+
+source .bashrc
+192.168.0.4
+192.168.103.3
+
+ros2 daemon stop
+ros2 daemon start
+
+nano /etc/turtlebot4_discovery/setup.bash
+
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot3/cmd_vel  # 테스트
+
+```
+
+
+
 ### 로봇 이동
 ```bash
 
