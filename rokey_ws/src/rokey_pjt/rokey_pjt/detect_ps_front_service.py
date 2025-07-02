@@ -1,4 +1,6 @@
 # detect_ps_front_service.py
+# ros2 launch rokey_pjt detect_ps_map_service.launch.py
+
 
 import rclpy
 from rclpy.node import Node
@@ -6,7 +8,7 @@ import numpy as np
 import json
 
 from sensor_msgs.msg import CameraInfo
-from geometry_msgs.msg import PointStamped, PoseStamped
+from geometry_msgs.msg import PointStamped, PoseStamped # PoseStamped는 계속 필요
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 
@@ -14,7 +16,9 @@ import tf2_ros
 import tf2_geometry_msgs
 from tf2_ros import TransformException
 
-from std_srvs.srv import Trigger
+# --- 기존 Trigger 서비스 임포트 대신, 새로 정의한 GetMapPose 서비스 임포트 ---
+# from std_srvs.srv import Trigger
+from rokey_pjt.srv import GetMapPose # <--- 이 줄을 추가합니다.
 
 class YOLOTFServiceNode(Node):
     def __init__(self):
@@ -29,9 +33,12 @@ class YOLOTFServiceNode(Node):
         self.create_subscription(String, '/detect/object_info', self.object_info_callback, 10)
 
         self.marker_pub = self.create_publisher(MarkerArray, '/object_markers', 10)
-        self.pose_pub = self.create_publisher(PoseStamped, '/detect/object_map_pose', 10)
+        # --- pose_pub은 더 이상 토픽으로 발행하지 않을 예정이므로 주석 처리하거나 제거합니다. ---
+        # self.pose_pub = self.create_publisher(PoseStamped, '/detect/object_map_pose', 10)
 
-        self.srv = self.create_service(Trigger, '/detect/object_map_pose_trigger', self.handle_pose_request)
+        # --- 서비스 서버 생성 부분을 GetMapPose 서비스로 변경합니다. ---
+        # self.srv = self.create_service(Trigger, '/detect/object_map_pose_trigger', self.handle_pose_request)
+        self.srv = self.create_service(GetMapPose, '/detect/get_object_map_pose', self.handle_pose_request) # <--- 이 줄로 변경합니다.
 
         self.marker_id = 0
 
@@ -51,10 +58,12 @@ class YOLOTFServiceNode(Node):
         except Exception as e:
             self.get_logger().error(f"객체 정보 파싱 실패: {e}")
 
+    # --- handle_pose_request 함수의 반환 타입(response)이 달라졌습니다. ---
     def handle_pose_request(self, request, response):
         if self.K is None:
             response.success = False
             response.message = "CameraInfo 없음"
+            # GetMapPose 서비스 응답에는 map_pose 필드가 있지만, 오류 시에는 기본값으로 둡니다.
             return response
 
         if not self.latest_objects:
@@ -62,7 +71,7 @@ class YOLOTFServiceNode(Node):
             response.message = "객체 정보 없음"
             return response
 
-        obj = self.latest_objects[0]  # 예: 첫 번째 객체만 사용
+        obj = self.latest_objects[0]
         try:
             u = obj['center_x']
             v = obj['center_y']
@@ -105,10 +114,18 @@ class YOLOTFServiceNode(Node):
             pose_msg.pose.position = point_map.point
             pose_msg.pose.orientation.w = 1.0
 
-            self.pose_pub.publish(pose_msg)
-            self.get_logger().info(f"PoseStamped 발행 완료: {pose_msg}")
+            # --- 이 부분이 중요합니다. PoseStamped를 서비스 응답에 할당합니다. ---
+            response.map_pose = pose_msg # <--- 이 줄을 추가합니다.
+            response.success = True
+            response.message = "PoseStamped 계산 및 반환 완료" # <--- 메시지도 변경합니다.
 
-            # Marker도 같이 발행
+            self.get_logger().info(f"PoseStamped 반환 완료: {response.map_pose}") # <--- 로그 메시지도 변경합니다.
+
+            # --- 기존 토픽 발행 코드는 주석 처리하거나 제거합니다. ---
+            # self.pose_pub.publish(pose_msg)
+            # self.get_logger().info(f"PoseStamped 발행 완료: {pose_msg}")
+
+            # Marker는 시각화 목적으로 계속 발행할 수 있습니다.
             marker = Marker()
             marker.header.frame_id = 'map'
             marker.header.stamp = self.get_clock().now().to_msg()
@@ -132,13 +149,11 @@ class YOLOTFServiceNode(Node):
             marker_array.markers.append(marker)
             self.marker_pub.publish(marker_array)
 
-            response.success = True
-            response.message = "PoseStamped 발행 완료"
-
         except Exception as e:
             self.get_logger().error(f"요청 처리 실패: {e}")
             response.success = False
             response.message = f"처리 실패: {e}"
+            # 오류 발생 시 response.map_pose는 기본값 (비어있는 PoseStamped)으로 남습니다.
 
         return response
 

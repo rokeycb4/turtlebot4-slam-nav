@@ -279,18 +279,26 @@ class ParkingLocationCommander(Node):
 
         # 좌표 맵
         self.location_map = {
+            """
             "A-1": (-2.28, -5.01, 90.0),
             "A-2": (-1.32, -5.15, 90.0),
             "B-1": (1.03, -2.06, 0.0),
             "B-2": (0.94, -1.10, 0.0),
             "C-1": (-2.95, -3.54, 180.0),
             "C-2": (-3.04, -4.59, 180.0),
+            """
+            "A-1": (-3.21, -5.34, 90.0),
+            "A-2": (-2.17, -5.40, 90.0),
+            "B-1": (0.55, -2.09, 180.0),
+            "B-2": (0.57, -1.12, 180.0),
+            "C-1": (-4.25, -3.44, 0.0),
+            "C-2": (-4.22, -4.48, 0.0),
         }
 
         # 위치 상수
-        self.initial_xyyaw = (-0.02, -0.02, 0.0)
-        self.wait_xyyaw = (-1.03, -0.02, 180.0)
-
+        self.initial_xyyaw = (-0.02, -0.02, 90.0)
+        #self.wait_xyyaw = (-1.03, -0.02, 180.0)
+        self.final_xyyaw=(-2.38,-4.38,180.0)
         # Nav2 활성화 대기
         #self.navigator.waitUntilNav2Active()
 
@@ -304,7 +312,7 @@ class ParkingLocationCommander(Node):
             time.sleep(2.0)
 
         # 대기 지점으로 이동
-        self.go_to_wait_pose()
+        #self.go_to_wait_pose()
 
         # 명령 구독 시작
         self.subscription = self.create_subscription(
@@ -362,11 +370,16 @@ class ParkingLocationCommander(Node):
         x, y, yaw = self.location_map[location]
         target_pose = create_pose(x, y, yaw, self.navigator)
         self.go_to_pose_blocking(target_pose, f"주차 위치: {location}")
+        time.sleep(5.0)
 
-        # 2️⃣ 초기 위치로 복귀
+        # 2️⃣ 최종 위치
+        final_pose = create_pose(*self.final_xyyaw, self.navigator)
+        self.go_to_pose_blocking(final_pose, "최종위치")
+        time.sleep(3.0)
+
+        # 2️⃣ 초기위치
         initial_pose = create_pose(*self.initial_xyyaw, self.navigator)
-        self.go_to_pose_blocking(initial_pose, "초기 위치 복귀 (-0.02, -0.02)")
-
+        self.go_to_pose_blocking(initial_pose, "원래위치")
         # 3️⃣ 초기 위치에서 도킹 요청
         self.get_logger().info('🚀 초기 위치 도착 → 도킹 요청 시작')
         self.dock_navigator.dock()

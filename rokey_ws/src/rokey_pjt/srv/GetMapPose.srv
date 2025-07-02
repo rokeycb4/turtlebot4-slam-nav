@@ -1,0 +1,5 @@
+# srv/GetMapPose.srv
+---
+geometry_msgs/PoseStamped map_pose
+string message
+bool success
