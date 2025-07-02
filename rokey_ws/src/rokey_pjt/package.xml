@@ -7,14 +7,17 @@
   <maintainer email="a93450311@gmail.com">fred</maintainer>
   <license>Apache-2.0</license>
 
+  <!-- ✅ 테스트 의존성 -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
+  <!-- ✅ 빌드 의존성 (인터페이스용) -->
   <build_depend>rosidl_default_generators</build_depend>
-  <build_depend>geometry_msgs</build_depend> <!-- ✅ 이 줄 추가 -->
+  <build_depend>geometry_msgs</build_depend>
 
+  <!-- ✅ 실행 의존성 -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
@@ -25,8 +28,10 @@
   <exec_depend>vision_msgs</exec_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
 
+  <!-- ✅ 인터페이스 그룹 -->
   <member_of_group>rosidl_interface_packages</member_of_group>
 
+  <!-- ✅ 빌드 타입 -->
   <export>
     <build_type>ament_python</build_type>
   </export>

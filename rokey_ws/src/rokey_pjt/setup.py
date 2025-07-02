@@ -1,21 +1,23 @@
 import os
 from glob import glob
-from setuptools import find_packages, setup
+from setuptools import setup
 
 package_name = 'rokey_pjt'
 
 setup(
     name=package_name,
     version='0.0.0',
-    packages=find_packages(exclude=['test']),
+    packages=[package_name],  # ✅ 고정: 안전하고 확실함
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.py'))),
+        (os.path.join('share', package_name, 'launch'),
+            glob(os.path.join('launch', '*launch.py'))),
 
-        # srv 폴더 내의 모든 '.srv' 파일들을 설치 경로에 포함
-        (os.path.join('share', package_name, 'srv'), glob(os.path.join('srv', '*.srv'))),
+        # # srv 폴더 내의 모든 '.srv' 파일 포함
+        # (os.path.join('share', package_name, 'srv'),
+        #     glob(os.path.join('srv', '*.srv'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
