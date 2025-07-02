@@ -128,6 +128,28 @@ ros2 run rokey_pjt detect_car_info
 
 ```
 
+
+## 네비게이션 테스트
+```bash
+ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/rokey_ws/maps/first_map1.yaml
+
+ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot3
+
+ros2 launch turtlebot4_viz view_robot.launch.py namespace:=/robot3
+
+ros2 run rokey_pjt navi_test --ros-args -r __ns:=/robot3
+# ros2 topic pub /robot3/parking/location std_msgs/msg/String "data: 'A-1'" -1
+
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot3/cmd_vel  # 테스트
+
+
+
+
+
+
+```
+
+
 ## 입차 최종
 ```bash
 ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot2 map:=$HOME/rokey_ws/maps/first_map.yaml
@@ -141,17 +163,3 @@ ros2 run rokey_pjt yolo_detect
 
 ```
 
-
-## 돌리기
-```bash
-ros2 topic pub /robot2/cmd_vel geometry_msgs/Twist "linear:
-  x: 0.0
-  y: 0.0
-  z: 0.0
-angular:
-  x: 0.0
-  y: 0.0
-  z: 0.5"
-
-
-```
