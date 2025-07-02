@@ -142,11 +142,6 @@ ros2 run rokey_pjt navi_test --ros-args -r __ns:=/robot3
 
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot3/cmd_vel  # 테스트
 
-
-
-
-
-
 ```
 
 
