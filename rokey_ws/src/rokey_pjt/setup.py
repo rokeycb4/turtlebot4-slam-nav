@@ -14,8 +14,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.py'))),
 
-        # srv 폴더 내의 모든 '.srv' 파일들을 설치 경로에 포함
-        (os.path.join('share', package_name, 'srv'), glob(os.path.join('srv', '*.srv'))),
+        # # srv 폴더 내의 모든 '.srv' 파일들을 설치 경로에 포함 (이건 그대로 둡니다)
+        # (os.path.join('share', package_name, 'srv'), glob(os.path.join('srv', '*.srv'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -41,4 +41,7 @@ setup(
             'detect_ps_front_service = rokey_pjt.detect_ps_front_service:main',
         ],
     },
+
+    **({'build_type': 'ament_python', 'ament_build_type': 'ament_python'} 
+       if 'ament_python' in os.environ.get('COLCON_EXTENSION_POINT_VERSION', '') else {}),
 )
