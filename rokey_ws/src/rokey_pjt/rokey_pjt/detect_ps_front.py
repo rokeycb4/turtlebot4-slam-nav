@@ -1,5 +1,4 @@
 # detect_ps_front.py
-# detect_ps_front.py
 
 import rclpy
 from rclpy.node import Node

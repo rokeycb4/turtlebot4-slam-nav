@@ -30,7 +30,6 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 
 ### 로봇 이동
 ```bash
-
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot3/cmd_vel
 
 ```
@@ -62,6 +61,8 @@ gnome-system-monitor
 
 ## Robot_TF Transform
 ```bash
+## 깃 클론
+
 #sudo apt update
 #sudo apt install ros-humble-irobot-create-control
 
@@ -113,10 +114,8 @@ ros2 run rokey_pjt yolo_detect
 # ros2 run rokey_pjt move_object_front
 ros2 launch rokey_pjt move_object_front.launch.py
 
-
 ros2 launch rokey_pjt move_object_front.launch.py
 ros2 launch rokey_pjt detect_ps_map.launch.py
-
 ```
 
 
@@ -127,16 +126,32 @@ ros2 launch rokey_pjt detect_ps_map.launch.py
 # ros2 run rokey_pjt carplate_ocr
 ros2 run rokey_pjt detect_car_info
 
+```
+
+## 입차 최종
+```bash
+ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot2 map:=$HOME/rokey_ws/maps/first_map.yaml
+ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot2
+ros2 launch turtlebot4_viz view_robot.launch.py namespace:=/robot2
+
+ros2 run rokey_pjt sc_follow_waypoints2
+
+ros2 run rokey_pjt yolo_detect
+
 
 ```
 
 
-
-## bashrc
+## 돌리기
 ```bash
-alias local='ros2 launch turtlebot4_navigation localization.launch.py   namespace:=/robot2   map:=$HOME/rokey_ws/maps/first_map1.yaml   params_file:=$HOME/rokey_ws/config/local2.yaml'
-alias rv='ros2 launch turtlebot4_viz view_robot.launch.py namespace:=/robot2'
-alias navi='ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot2 params_file:=$HOME/rokey_ws/config/nav2_net2.yaml'
-alias way='ros2 run rokey_pjt sc_follow_waypoints --ros-args -r __ns:=/robot2' 
+ros2 topic pub /robot2/cmd_vel geometry_msgs/Twist "linear:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+angular:
+  x: 0.0
+  y: 0.0
+  z: 0.5"
+
 
 ```
