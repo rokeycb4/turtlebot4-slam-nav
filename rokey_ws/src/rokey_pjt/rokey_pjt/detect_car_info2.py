@@ -1,6 +1,4 @@
-# detect_car_info.py
-# ros2 run rokey_pjt detect_car_info2 --ros-args -- --mode raw
-# ros2 run rokey_pjt detect_car_info2 --ros-args -- --mode compressed
+# detect_car_info2.py
 
 import rclpy
 from rclpy.node import Node
@@ -19,7 +17,7 @@ import numpy as np
 import os
 import sys
 import json
-
+import re
 import argparse
 
 MODEL_PATH = '/home/rokey/rokey_ws/car_plate2.pt'
@@ -109,6 +107,10 @@ class CarPlateOCRNode(Node):
                     if roi.size == 0:
                         continue
 
+                    # ✅ 좌측 8% crop
+                    crop_x = int(roi.shape[1] * 0.08)
+                    roi = roi[:, crop_x:]
+
                     gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
                     denoised_roi = cv2.medianBlur(gray_roi, 3)
                     _, binary_roi = cv2.threshold(denoised_roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -123,12 +125,16 @@ class CarPlateOCRNode(Node):
                     result = self.reader.readtext(binary_roi, detail=0)
                     ocr_text = ''.join(result).strip().replace(' ', '')
 
-                    for c in [':', '|', '(', ')', '[', ']', '{', '}', ';', '\'', '"', '~', '!']:
+                    for c in [':', '|', '(', ')', '[', ']', '{', '}', ';', '\'', '"', '~', '!', '-']:
                         ocr_text = ocr_text.replace(c, '')
 
-                    if ocr_text:
-                        final_ocr_text = ocr_text
-                        self.get_logger().info(f"OCR 결과 ({class_name}): {final_ocr_text}")
+                    # ✅ 정규식 필터링
+                    if not re.fullmatch(r"\d{2,3}[가-힣]\d{4}", ocr_text):
+                        self.get_logger().info(f"OCR 결과 무시됨 (정규식 불일치): {ocr_text}")
+                        continue
+
+                    final_ocr_text = ocr_text
+                    self.get_logger().info(f"OCR 결과 ({class_name}): {final_ocr_text}")
 
                     cv2.rectangle(img_display, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
@@ -136,7 +142,7 @@ class CarPlateOCRNode(Node):
                     draw = ImageDraw.Draw(img_pil)
                     try:
                         font = ImageFont.truetype(self.font_path, 30)
-                        draw.text((x1, y1 - 40), final_ocr_text, font=font, fill=(255, 0, 0, 0))
+                        draw.text((x1, y1 - 40), f"{class_name}: {final_ocr_text}", font=font, fill=(255, 0, 0, 0))
                     except Exception as e:
                         self.get_logger().error(f"PIL 텍스트 렌더링 실패: {e}")
 
