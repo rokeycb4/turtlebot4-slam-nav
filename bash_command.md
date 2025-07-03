@@ -158,3 +158,20 @@ ros2 run rokey_pjt yolo_detect
 
 ```
 
+## 출차 최종
+```bash
+ros2 launch turtlebot4_navigation localization.launch.py namespace:=/robot3 map:=$HOME/rokey_ws/maps/first_map1.yaml
+ros2 launch turtlebot4_viz view_robot.launch.py namespace:=/robot3
+
+ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot3
+ros2 launch turtlebot4_navigation nav2.launch.py namespace:=/robot3 params_file:=$HOME/turtlebot4_ws/configs/nav2_net.yaml
+
+# ros2 run rokey_pjt yolo_detect
+ros2 run rokey_pjt sc_follow_waypoints --ros-args -r __ns:=/robot3
+
+
+ros2 run rokey_pjt yolo_detect
+ros2 run rokey_pjt beep
+
+
+```
