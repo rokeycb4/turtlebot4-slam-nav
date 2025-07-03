@@ -1,4 +1,5 @@
 # detect_ps_front.py
+# ros2 launch rokey_pjt detect_ps_front.launch.py
 
 import rclpy
 from rclpy.node import Node
