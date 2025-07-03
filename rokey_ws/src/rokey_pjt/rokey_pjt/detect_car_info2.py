@@ -1,4 +1,8 @@
 # detect_car_info2.py
+# ros2 run rokey_pjt detect_car_info2 --ros-args -- --mode raw
+# ros2 run rokey_pjt detect_car_info2 --ros-args -- --mode compressed
+# ros2 run rokey_pjt detect_car_info2 --mode raw
+# ros2 run rokey_pjt detect_car_info2 --mode compressed
 
 import rclpy
 from rclpy.node import Node
