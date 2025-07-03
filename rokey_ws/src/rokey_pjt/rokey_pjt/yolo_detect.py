@@ -79,7 +79,7 @@ class DetectAllObjectsWithDistance(Node):
                 continue
 
             # ROI 기반 거리 추정 (3x3)
-            roi_size = 3  # 3x3 영역으로 변경
+            roi_size = 3  
             x_start = max(0, u - roi_size // 2)
             x_end = min(depth.shape[1], u + roi_size // 2 + 1)
             y_start = max(0, v - roi_size // 2)
