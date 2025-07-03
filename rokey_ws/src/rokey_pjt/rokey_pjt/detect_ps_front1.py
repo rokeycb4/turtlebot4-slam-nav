@@ -1,5 +1,5 @@
+#!/usr/bin/env python3
 # detect_ps_front.py
-# ros2 launch rokey_pjt detect_ps_front.launch.py
 
 import rclpy
 from rclpy.node import Node
@@ -97,35 +97,30 @@ class YOLOTFNode(Node):
 
             self.pose_pub.publish(pose_msg)
 
-            # ✅ TEXT 마커로 "P" 사인 표시
             marker = Marker()
             marker.header.frame_id = 'map'
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = "objects"
             marker.id = self.marker_id
             self.marker_id += 1
-            marker.type = Marker.TEXT_VIEW_FACING
+            marker.type = Marker.SPHERE
             marker.action = Marker.ADD
             marker.pose.position = point_map.point
             marker.pose.orientation.w = 1.0
-
-            # 텍스트 타입은 scale.z만 사용함 (폰트 크기)
-            marker.scale.z = 0.5  # 크기 조절
-
+            marker.scale.x = 0.2
+            marker.scale.y = 0.2
+            marker.scale.z = 0.2
             marker.color.r = 0.0
-            marker.color.g = 0.0
-            marker.color.b = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
             marker.color.a = 1.0
-
-            marker.text = "P"
-
             marker.lifetime.sec = 1
 
             marker_array = MarkerArray()
             marker_array.markers.append(marker)
             self.marker_pub.publish(marker_array)
 
-            self.get_logger().info(f"PoseStamped & P 사인 마커 발행 완료: x={point_map.point.x:.2f} y={point_map.point.y:.2f}")
+            self.get_logger().info(f"PoseStamped 발행 완료: x={point_map.point.x:.2f} y={point_map.point.y:.2f}")
 
         except TransformException as e:
             self.get_logger().warn(f"TF 변환 실패: {e}")
