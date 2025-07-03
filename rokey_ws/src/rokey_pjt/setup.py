@@ -38,6 +38,9 @@ setup(
             'move_object_front = rokey_pjt.move_object_front:main',
             'carplate_ocr = rokey_pjt.carplate_ocr:main',
             'detect_car_info = rokey_pjt.detect_car_info:main',
+            'detect_car_info2 = rokey_pjt.detect_car_info:main',
+
+
             'sc_follow_waypoints = rokey_pjt.sc_follow_waypoints:main',
             'detect_ps_map = rokey_pjt.detect_ps_map:main',
             'detect_ps_front_service = rokey_pjt.detect_ps_front_service:main',

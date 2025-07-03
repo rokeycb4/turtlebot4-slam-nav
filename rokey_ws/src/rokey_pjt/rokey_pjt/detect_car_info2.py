@@ -1,6 +1,8 @@
 # detect_car_info.py
 # ros2 run rokey_pjt detect_car_info2 --ros-args -- --mode raw
 # ros2 run rokey_pjt detect_car_info2 --ros-args -- --mode compressed
+# ros2 run rokey_pjt detect_car_info2 --mode raw
+# ros2 run rokey_pjt detect_car_info2 --mode compressed
 
 import rclpy
 from rclpy.node import Node
@@ -24,8 +26,8 @@ import argparse
 
 MODEL_PATH = '/home/rokey/rokey_ws/car_plate2.pt'
 
-RAW_TOPIC = '/robot2/oakd/rgb/image_raw'
-COMPRESSED_TOPIC = '/robot2/oakd/rgb/image_raw/compressed'
+RAW_TOPIC = '/robot3/oakd/rgb/image_raw'
+COMPRESSED_TOPIC = '/robot3/oakd/rgb/image_raw/compressed'
 
 CONF = 0.5
 PROCESS_INTERVAL_SEC = 0.2
