@@ -110,7 +110,7 @@ class YOLOTFNode(Node):
             marker.pose.orientation.w = 1.0
 
             # 텍스트 타입은 scale.z만 사용함 (폰트 크기)
-            marker.scale.z = 0.5  # 크기 조절
+            marker.scale.z = 0.3  # 크기 조절
 
             marker.color.r = 0.0
             marker.color.g = 0.0

@@ -43,6 +43,7 @@ setup(
 
             'sc_follow_waypoints = rokey_pjt.sc_follow_waypoints:main',
             'detect_ps_map = rokey_pjt.detect_ps_map:main',
+            'detect_ps_front = rokey_pjt.detect_ps_front:main',
             'detect_ps_front_service = rokey_pjt.detect_ps_front_service:main',
         ],
     },

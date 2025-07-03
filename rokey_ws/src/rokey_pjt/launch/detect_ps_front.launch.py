@@ -13,7 +13,7 @@ def generate_launch_description():
 
     node_executable = 'detect_ps_front'  # setup.py entry_points 이름
 
-    robot_namespace = '/robot2'  # 로봇 TF 네임스페이스
+    robot_namespace = '/robot3'  # 로봇 TF 네임스페이스
 
     return LaunchDescription([
         Node(
