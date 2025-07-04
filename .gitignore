@@ -9,3 +9,5 @@ rokey_ws/log/
 
 
 .vscode/
+# InfluxDB credentials
+rokey_ws/src/rokey_pjt/.env 

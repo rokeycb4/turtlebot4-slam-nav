@@ -4,17 +4,28 @@
 import sys
 import os
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import time
-import cv2
-import numpy as np
+import logging
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, 
                              QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QStackedWidget,
                              QMessageBox, QDialog, QComboBox, QListWidget, QListWidgetItem)
 from PyQt5.QtGui import QPixmap, QFont, QColor, QPalette, QImage
-from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QObject, QTimer
 import re
+import json
+
+# DB 관리자 임포트
+from rokey_pjt.db_manager import DBManager
+
+# 로거 설정
+logger = logging.getLogger('parking_gui')
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 # ROS2 관련 import
 import rclpy
@@ -22,6 +33,9 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from std_msgs.msg import String
+
+# Qt 플러그인 경로 문제 해결을 위한 환경 변수 설정
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = "/usr/lib/x86_64-linux-gnu/qt5/plugins"
 
 # 토픽 메시지 시뮬레이션을 위한 클래스
 class ParkingDataManager(QObject):
@@ -31,24 +45,15 @@ class ParkingDataManager(QObject):
     parking_location_updated = pyqtSignal(str)  # 차량 위치 정보
     # 카메라 영상 시그널 정의
     camera_frame_updated = pyqtSignal(QImage)  # 카메라 프레임 업데이트
+    # OCR 결과 업데이트 시그널 정의
+    ocr_result_updated = pyqtSignal(str, str)  # 번호판, 차량 타입
     
     def __init__(self):
         super().__init__()
         
-        # 엑셀 파일 경로 - 절대 경로로 수정
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.excel_dir = os.path.join(script_dir, "data")
-        self.vehicles_file = os.path.join(self.excel_dir, "parked_vehicles.xlsx")
-        self.history_file = os.path.join(self.excel_dir, "parking_history.xlsx")
-        
-        print(f"데이터 디렉토리 경로: {self.excel_dir}")
-        
-        # 데이터 디렉토리 생성
-        try:
-            os.makedirs(self.excel_dir, exist_ok=True)
-            print(f"데이터 디렉토리 생성 완료: {self.excel_dir}")
-        except Exception as e:
-            print(f"데이터 디렉토리 생성 실패: {e}")
+        # DB 관리자 초기화
+        self.db_manager = DBManager()
+        logger.info("DB 관리자 초기화 완료")
         
         # 주차장 상태 정보 초기화 - 사용중 0, 주차 가능 2로 설정
         self.parking_data = {
@@ -73,16 +78,19 @@ class ParkingDataManager(QObject):
         # 사용 중인 주차 위치 (위치 -> 차량 번호)
         self.occupied_locations = {}
         
-        # 저장된 데이터 로드 - 초기화 후에 로드하여 기존 값 덮어쓰기
-        self.load_data()
-        
         # 현재 차량 위치 정보
         self.current_parking_location = "-"
         
-        # 이미지 경로 설정
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.default_image_path = os.path.join(script_dir, "images/parking_dis.jpg")
-        self.exit_image_path = os.path.join(script_dir, "images/exit_dis.jpg")
+        # 데이터 로드
+        self.load_data()
+        
+        # 주기적 데이터 갱신을 위한 타이머 설정
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.refresh_data)
+        self.update_timer.start(5000)  # 5초마다 데이터 갱신 (기존 10초에서 단축)
+        
+        # 마지막 데이터 갱신 시간
+        self.last_refresh_time = datetime.now()
         
         # ROS2 관련 변수
         self.ros_node = None
@@ -90,9 +98,145 @@ class ParkingDataManager(QObject):
         self.camera_subscription = None
         self.ros_thread = None
         self.running = True
+
+        # 토픽 변수
+        # self.camera_sub = '/robot2/oakd/rgb/image_raw'   # --> 2번 turtlebot 
+        # self.camera_sub = '/robot3/oakd/rgb/image_raw'   # --> 3번 turtlebot
+        self.camera_sub = '/detect/yolo_distance_image' # --> 거리 감지 영상 토픽
+        self.ocr_sub = '/carplate/ocr_result' # --> 번호판 OCR 결과 토픽
+        self.location_pub = '/parking/location' # --> 주차 위치 발행 토픽
         
         # ROS2 초기화 및 토픽 구독 시작
         self.start_ros()
+    
+    def refresh_data(self):
+        """주기적으로 데이터베이스에서 데이터 갱신"""
+        try:
+            current_time = datetime.now()
+            elapsed_seconds = (current_time - self.last_refresh_time).total_seconds()
+            
+            # 너무 빈번한 갱신 방지 (최소 5초 간격)
+            if elapsed_seconds < 5:
+                return
+                
+            logger.info("데이터베이스에서 데이터 갱신 중...")
+            self.last_refresh_time = current_time
+            
+            # 1. 현재 주차된 차량 정보만 빠르게 조회    
+            parked_df = self.db_manager.fetch_current_parked_vehicles()
+            
+            # 주차된 차량 정보 업데이트
+            self.parked_vehicles = {}
+            self.occupied_locations = {}
+            
+            if not parked_df.empty:
+                for _, row in parked_df.iterrows():
+                    license_plate = row['license_plate']
+                    car_type = row['car_type']
+                    location = row['location']
+                    
+                    # 주차된 차량 정보 저장
+                    self.parked_vehicles[license_plate] = {
+                        'car_type': car_type,
+                        'location': location
+                    }
+                    
+                    # 사용 중인 위치 정보 업데이트
+                    if location != '-':
+                        self.occupied_locations[location] = license_plate
+            
+            # 2. 주차장 통계 정보 업데이트 (DB 쿼리 없이 로컬에서 계산)
+            self.update_statistics()
+            
+            # 3. 데이터 업데이트 시그널 발생
+            self.data_updated.emit(self.parking_data)
+            
+            logger.info(f"데이터 갱신 완료: {len(self.parked_vehicles)}대 주차 중")
+        except Exception as e:
+            logger.error(f"데이터 갱신 중 오류 발생: {e}")
+    
+    def update_statistics(self):
+        """주차된 차량 정보를 바탕으로 통계 정보 업데이트"""
+        # 기본값으로 초기화
+        self.parking_data = {
+            "total": {"normal": 2, "ev": 2, "disabled": 2},
+            "occupied": {"normal": 0, "ev": 0, "disabled": 0},
+            "available": {"normal": 2, "ev": 2, "disabled": 2}
+        }
+        
+        # 주차된 차량 정보를 바탕으로 통계 계산
+        for _, info in self.parked_vehicles.items():
+            car_type = info.get('car_type', 'normal')
+            if car_type in self.parking_data["occupied"]:
+                self.parking_data["occupied"][car_type] += 1
+                self.parking_data["available"][car_type] = max(0, self.parking_data["total"][car_type] - self.parking_data["occupied"][car_type])
+    
+    def load_data(self):
+        """데이터베이스에서 데이터 로드"""
+        try:
+            logger.info("데이터베이스에서 데이터 로드 중...")
+            
+            # 1. 현재 주차된 차량 조회 (최적화된 쿼리 사용)
+            parked_df = self.db_manager.fetch_current_parked_vehicles()
+            
+            # 주차된 차량 정보 초기화
+            self.parked_vehicles = {}
+            self.occupied_locations = {}
+            
+            # 주차된 차량 정보 업데이트
+            if not parked_df.empty:
+                for _, row in parked_df.iterrows():
+                    license_plate = row['license_plate']
+                    car_type = row['car_type']
+                    location = row['location']
+                    
+                    # 주차된 차량 정보 저장
+                    self.parked_vehicles[license_plate] = {
+                        'car_type': car_type,
+                        'location': location
+                    }
+                    
+                    # 사용 중인 위치 정보 업데이트
+                    if location != '-':
+                        self.occupied_locations[location] = license_plate
+            
+            # 2. 최근 출차 기록 조회 (주차 이력용) - 필요할 때만 로드
+            # exit_df = self.db_manager.fetch_recent_exit_records()
+            
+            # 3. 모든 주차 데이터 조회 (필요할 때만 로드)
+            all_data = self.db_manager.fetch_all_parking_data()
+            
+            # 주차 이력 정보 업데이트
+            self.parking_history = []
+            if all_data is not None and not all_data.empty:
+                for _, row in all_data.iterrows():
+                    history_data = {
+                        "license_plate": row['license_plate'],
+                        "car_type": row['car_type'],
+                        "location": row['location'],
+                        "status": row['status'],
+                        "timestamp": row['time']
+                    }
+                    
+                    # 날짜와 시간 정보 추출
+                    try:
+                        dt = pd.to_datetime(row['time'])
+                        history_data["date"] = dt.strftime("%Y-%m-%d")
+                        history_data["time"] = dt.strftime("%H:%M:%S")
+                        history_data["action"] = "주차" if row['status'] == 'parked' else "출차"
+                    except:
+                        pass
+                    
+                    self.parking_history.append(history_data)
+            
+            # 4. 주차장 통계 정보 업데이트
+            self.update_statistics()
+            
+            logger.info(f"데이터 로드 완료: {len(self.parked_vehicles)}대 주차 중")
+            
+        except Exception as e:
+            logger.error(f"데이터 로드 중 오류 발생: {e}")
+            logger.exception("데이터 로드 중 예외 발생")
     
     def start_ros(self):
         """ROS2 초기화 및 토픽 구독 시작"""
@@ -111,30 +255,106 @@ class ParkingDataManager(QObject):
             # 카메라 토픽 구독
             self.camera_subscription = self.ros_node.create_subscription(
                 Image,
-                '/robot3/oakd/rgb/image_raw',
+                self.camera_sub,
                 self._camera_callback,
                 10)
             
-            print("ROS2 초기화 및 카메라 토픽 구독 시작")
-            self.location_publisher = self.ros_node.create_publisher(String, '/parking/location', 10)
-            print("parking 토픽 전송 시작")
+            # 번호판 OCR 결과 토픽 구독
+            self.ocr_subscription = self.ros_node.create_subscription(
+                String,
+                self.ocr_sub,
+                self._ocr_result_callback,
+                10)
+            
+            logger.info("ROS2 초기화 및 토픽 구독 시작")
+            
+            # 주차 위치 정보 발행을 위한 퍼블리셔 생성
+            self.location_publisher = self.ros_node.create_publisher(
+                String, 
+                self.location_pub, 
+                10
+            )
+            logger.info(f"location_publisher 생성 완료: {self.location_publisher}")
+            
             # ROS2 스핀
             while self.running and rclpy.ok():
                 rclpy.spin_once(self.ros_node, timeout_sec=0.1)
                 time.sleep(0.01)
             
         except Exception as e:
-            print(f"ROS2 초기화 중 오류 발생: {e}")
+            logger.error(f"ROS2 초기화 중 오류 발생: {e}")
+            logger.exception("ROS2 초기화 중 예외 발생")
+            
         finally:
-            # 정리
+            # ROS2 종료
             if self.ros_node is not None:
                 self.ros_node.destroy_node()
             rclpy.shutdown()
-            print("ROS2 종료")
+            logger.info("ROS2 종료")
+    
+    def stop_ros(self):
+        """ROS2 종료"""
+        logger.info("ROS2 종료 시작")
+        self.running = False
+        
+        # 구독 해제
+        if hasattr(self, 'camera_subscription') and self.camera_subscription:
+            try:
+                self.ros_node.destroy_subscription(self.camera_subscription)
+                self.camera_subscription = None
+                logger.info("카메라 구독 해제 완료")
+            except Exception as e:
+                logger.warning(f"카메라 구독 해제 중 오류: {e}")
+        
+        if hasattr(self, 'ocr_subscription') and self.ocr_subscription:
+            try:
+                self.ros_node.destroy_subscription(self.ocr_subscription)
+                self.ocr_subscription = None
+                logger.info("OCR 구독 해제 완료")
+            except Exception as e:
+                logger.warning(f"OCR 구독 해제 중 오류: {e}")
+        
+        # 발행자 해제
+        if hasattr(self, 'location_publisher') and self.location_publisher:
+            try:
+                self.ros_node.destroy_publisher(self.location_publisher)
+                self.location_publisher = None
+                logger.info("위치 발행자 해제 완료")
+            except Exception as e:
+                logger.warning(f"위치 발행자 해제 중 오류: {e}")
+        
+        # ROS 스레드 종료 대기
+        if self.ros_thread is not None:
+            try:
+                self.ros_thread.join(2.0)  # 최대 2초 대기
+                logger.info("ROS 스레드 종료 대기 완료")
+            except Exception as e:
+                logger.warning(f"ROS 스레드 종료 대기 중 오류: {e}")
+        
+        # ROS 노드 정리
+        if hasattr(self, 'ros_node') and self.ros_node:
+            try:
+                self.ros_node.destroy_node()
+                self.ros_node = None
+                logger.info("ROS 노드 정리 완료")
+            except Exception as e:
+                logger.warning(f"ROS 노드 정리 중 오류: {e}")
+        
+        # ROS 종료
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+                logger.info("ROS2 종료 완료")
+        except Exception as e:
+            logger.warning(f"ROS2 종료 중 오류: {e}")
     
     def _camera_callback(self, msg):
         """카메라 토픽 콜백 함수"""
         try:
+            # 종료 중이면 콜백 처리하지 않음
+            if not self.running:
+                return
+                
             # ROS 이미지 메시지를 OpenCV 이미지로 변환
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             
@@ -147,146 +367,38 @@ class ParkingDataManager(QObject):
             self.camera_frame_updated.emit(q_image)
             
         except Exception as e:
-            print(f"카메라 콜백 중 오류 발생: {e}")
+            logger.error(f"카메라 콜백 중 오류 발생: {e}")
     
-    def stop_ros(self):
-        """ROS2 종료"""
-        self.running = False
-        if self.ros_thread is not None:
-            self.ros_thread.join(1.0)
-    
-    def load_data(self):
-        """저장된 데이터 로드"""
+    def _ocr_result_callback(self, msg):
+        """OCR 결과 토픽 콜백 함수"""
         try:
-            # 주차된 차량 정보 로드
-            if os.path.exists(self.vehicles_file):
-                print(f"주차 정보 파일 로드: {self.vehicles_file}")
-                df_vehicles = pd.read_excel(self.vehicles_file)
+            # 종료 중이면 콜백 처리하지 않음
+            if not self.running:
+                return
                 
-                # 데이터프레임에 'location' 열이 있는지 확인
-                if 'location' in df_vehicles.columns:
-                    # 번호판, 차량 타입, 위치 정보를 딕셔너리로 변환
-                    self.parked_vehicles = {}
-                    self.occupied_locations = {}  # 사용 중인 위치 초기화
-                    
-                    for _, row in df_vehicles.iterrows():
-                        license_plate = row['license_plate']
-                        car_type = row['car_type']
-                        location = row['location']
-                        
-                        self.parked_vehicles[license_plate] = {
-                            'car_type': car_type,
-                            'location': location
-                        }
-                        
-                        # 위치 정보가 있으면 사용 중인 위치에 추가
-                        if location != '-':
-                            self.occupied_locations[location] = license_plate
-                else:
-                    # 이전 버전 호환성을 위한 처리
-                    self.parked_vehicles = {}
-                    for _, row in df_vehicles.iterrows():
-                        self.parked_vehicles[row['license_plate']] = {
-                            'car_type': row['car_type'],
-                            'location': '-'
-                        }
-                
-                print(f"로드된 주차 정보: {self.parked_vehicles}")
-                
-                # 주차 상태 업데이트
-                self.update_parking_status_from_vehicles()
-                print(f"업데이트된 주차 상태: {self.parking_data}")
-                
-            else:
-                print(f"주차 정보 파일이 없습니다. 새로 생성됩니다: {self.vehicles_file}")
-                # 데이터 초기화는 이미 __init__에서 수행됨
-                
-            # 주차 이력 정보 로드
-            if os.path.exists(self.history_file):
-                print(f"주차 이력 파일 로드: {self.history_file}")
-                df_history = pd.read_excel(self.history_file)
-                self.parking_history = df_history.to_dict('records')
-                print(f"로드된 주차 이력 수: {len(self.parking_history)}")
-            else:
-                print(f"주차 이력 파일이 없습니다. 새로 생성됩니다: {self.history_file}")
-                
-        except Exception as e:
-            print(f"데이터 로드 중 오류 발생: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def update_parking_status_from_vehicles(self):
-        """주차된 차량 정보로부터 주차 상태 업데이트"""
-        # 주차 상태 초기화 (occupied만 초기화)
-        self.parking_data["occupied"] = {"normal": 0, "ev": 0, "disabled": 0}
-        
-        # 주차된 차량 정보로 상태 업데이트
-        for vehicle_info in self.parked_vehicles.values():
-            car_type = vehicle_info['car_type'] if isinstance(vehicle_info, dict) else vehicle_info
-            if car_type in self.parking_data["occupied"]:
-                self.parking_data["occupied"][car_type] += 1
-        
-        # 가용 공간 업데이트
-        for car_type in self.parking_data["available"]:
-            self.parking_data["available"][car_type] = self.parking_data["total"][car_type] - self.parking_data["occupied"][car_type]
-    
-    def save_data(self):
-        """데이터 저장"""
-        try:
-            # 데이터 디렉토리 확인 및 생성
-            if not os.path.exists(self.excel_dir):
-                try:
-                    os.makedirs(self.excel_dir, exist_ok=True)
-                    print(f"데이터 디렉토리가 없어 새로 생성했습니다: {self.excel_dir}")
-                except Exception as e:
-                    print(f"데이터 디렉토리 생성 실패: {e}")
-                    return
+            # JSON 문자열을 파싱
+            ocr_data = json.loads(msg.data)
             
-            # 주차된 차량 정보 저장
-            if self.parked_vehicles:
-                print(f"주차 정보 저장 중: {len(self.parked_vehicles)}대")
-                
-                # 차량 정보를 데이터프레임으로 변환
-                license_plates = []
-                car_types = []
-                locations = []
-                
-                for license_plate, vehicle_info in self.parked_vehicles.items():
-                    license_plates.append(license_plate)
-                    
-                    if isinstance(vehicle_info, dict):
-                        car_types.append(vehicle_info.get('car_type', 'normal'))
-                        locations.append(vehicle_info.get('location', '-'))
-                    else:
-                        # 이전 버전 호환성을 위한 처리
-                        car_types.append(vehicle_info)
-                        locations.append('-')
-                
-                df_vehicles = pd.DataFrame({
-                    'license_plate': license_plates,
-                    'car_type': car_types,
-                    'location': locations
-                })
-                
-                df_vehicles.to_excel(self.vehicles_file, index=False)
-                print(f"주차 정보가 저장되었습니다: {self.vehicles_file}")
-            elif os.path.exists(self.vehicles_file):
-                # 주차된 차량이 없으면 파일 삭제
-                os.remove(self.vehicles_file)
-                print(f"주차된 차량이 없어 파일을 삭제했습니다: {self.vehicles_file}")
+            # 차량 번호와 타입 추출
+            car_plate = ocr_data.get('car_plate', '')
+            car_type = ocr_data.get('type', 'normal')
             
-            # 주차 이력 정보 저장
-            if self.parking_history:
-                print(f"주차 이력 저장 중: {len(self.parking_history)}건")
-                df_history = pd.DataFrame(self.parking_history)
-                
-                df_history.to_excel(self.history_file, index=False)
-                print(f"주차 이력이 저장되었습니다: {self.history_file}")
+            # 'electric' 타입을 'ev'로 변환
+            if car_type == 'electric':
+                car_type = 'ev'
+            
+            # 유효한 타입인지 확인
+            if car_type not in ['normal', 'ev', 'disabled']:
+                car_type = 'normal'  # 기본값으로 설정
+            
+            logger.info(f"OCR 결과 수신: 번호판={car_plate}, 타입={car_type}")
+            
+            # 이 부분은 GUI 클래스에서 처리할 수 있도록 시그널 추가 필요
+            self.ocr_result_updated.emit(car_plate, car_type)
             
         except Exception as e:
-            print(f"데이터 저장 중 오류 발생: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"OCR 결과 처리 중 오류 발생: {e}")
+            logger.exception("OCR 결과 처리 중 예외 발생")
     
     def get_current_data(self):
         """현재 주차장 상태 데이터 반환"""
@@ -313,6 +425,35 @@ class ParkingDataManager(QObject):
         # 모든 위치가 사용 중이면 "-" 반환
         return "-"
     
+    def publish_location(self, location):
+        """
+        주차 위치 정보를 ROS 토픽으로 발행
+        
+        Args:
+            location (str): 주차 위치 (예: "A-1", "B-2" 등)
+        """
+        logger.info(f"publish_location 메서드 호출됨: {location}")
+        
+        # location_publisher 속성이 있는지 확인
+        if not hasattr(self, 'location_publisher'):
+            logger.error("[ERROR] location_publisher 속성이 없습니다.")
+            return
+        
+        # location_publisher가 None이 아닌지 확인
+        if self.location_publisher is None:
+            logger.error("[ERROR] location_publisher가 None입니다.")
+            return
+        
+        try:
+            # 메시지 생성 및 발행
+            msg = String()
+            msg.data = location
+            self.location_publisher.publish(msg)
+            logger.info(f"[ROS Publish 성공] /parking/location: {location}")
+        except Exception as e:
+            logger.error(f"[ERROR] 메시지 발행 중 오류 발생: {e}")
+            logger.exception("메시지 발행 중 예외 발생")
+    
     def simulate_parking(self, car_type="normal", license_plate=""):
         """주차 시뮬레이션"""
         # 번호판이 이미 존재하는지 확인
@@ -321,15 +462,9 @@ class ParkingDataManager(QObject):
             return False, "duplicate"
             
         if self.parking_data["available"][car_type] > 0:
-            self.parking_data["occupied"][car_type] += 1
-            self.parking_data["available"][car_type] -= 1
-            
-            # 번호판이 없는 경우 오류 반환
-            if not license_plate or license_plate == "-":
-                return False, "no_license"
-            
             # 차량 타입에 맞는 주차 위치 할당
             location = self.get_parking_location(car_type)
+            logger.info(f"할당된 주차 위치: {location}")
             
             # 위치 정보 업데이트
             self.current_parking_location = location
@@ -340,6 +475,12 @@ class ParkingDataManager(QObject):
             # 사용 중인 위치에 추가
             if location != "-":
                 self.occupied_locations[location] = license_plate
+                
+                # 주차 위치 정보 발행 (명시적으로 호출)
+                logger.info(f"주차 위치 발행 시도: {location}")
+                self.publish_location(location)
+            else:
+                logger.warning("[WARNING] 주차 위치가 '-'이므로 발행하지 않습니다.")
             
             # 차량 정보 저장
             self.parked_vehicles[license_plate] = {
@@ -347,13 +488,22 @@ class ParkingDataManager(QObject):
                 'location': location
             }
             
-            # 주차 이력 추가
-            self.add_parking_history(license_plate, car_type, "park", location)
+            # DB에 주차 기록 추가
+            success = self.db_manager.park_vehicle(license_plate, car_type, location)
+            if not success:
+                logger.error(f"DB에 주차 기록 추가 실패: {license_plate}, {car_type}, {location}")
+                return False, "db_error"
             
-            # 데이터 저장
-            self.save_data()
+            # 주차 상태 업데이트
+            self.parking_data["occupied"][car_type] += 1
+            self.parking_data["available"][car_type] -= 1
             
+            # 데이터 업데이트 시그널 발생
             self.data_updated.emit(self.parking_data)
+            
+            # 데이터 갱신
+            self.load_data()
+            
             return True, ""
         return False, "no_space"
     
@@ -380,16 +530,21 @@ class ParkingDataManager(QObject):
                 if location != "-" and location in self.occupied_locations:
                     del self.occupied_locations[location]
                 
-                # 주차 정보에서 삭제
+                # DB에 출차 기록 추가
+                success = self.db_manager.exit_vehicle(license_plate, car_type, location)
+                if not success:
+                    logger.error(f"DB에 출차 기록 추가 실패: {license_plate}, {car_type}, {location}")
+                    return False, "", ""
+                
+                # 주차된 차량 목록에서 삭제
                 del self.parked_vehicles[license_plate]
                 
-                # 출차 이력 추가
-                self.add_parking_history(license_plate, car_type, "leave", location)
-                
-                # 데이터 저장
-                self.save_data()
-                
+                # 데이터 업데이트 시그널 발생
                 self.data_updated.emit(self.parking_data)
+                
+                # 데이터 갱신
+                self.load_data()
+                
                 return True, car_type, location
             
         # 번호판 정보가 없는 경우 주차된 차량이 있으면 첫 번째 차량 출차
@@ -415,46 +570,24 @@ class ParkingDataManager(QObject):
                 if location != "-" and location in self.occupied_locations:
                     del self.occupied_locations[location]
                 
-                # 주차 정보에서 삭제
+                # DB에 출차 기록 추가
+                success = self.db_manager.exit_vehicle(first_license_plate, car_type, location)
+                if not success:
+                    logger.error(f"DB에 출차 기록 추가 실패: {first_license_plate}, {car_type}, {location}")
+                    return False, "", ""
+                
+                # 주차된 차량 목록에서 삭제
                 del self.parked_vehicles[first_license_plate]
                 
-                # 출차 이력 추가
-                self.add_parking_history(first_license_plate, car_type, "leave", location)
-                
-                # 데이터 저장
-                self.save_data()
-                
+                # 데이터 업데이트 시그널 발생
                 self.data_updated.emit(self.parking_data)
+                
+                # 데이터 갱신
+                self.load_data()
+                
                 return True, car_type, location
         
         return False, "", ""
-    
-    def add_parking_history(self, license_plate, car_type, action, location="-"):
-        """주차/출차 이력 추가"""
-        car_type_names = {
-            "normal": "일반 차량",
-            "ev": "전기 차량",
-            "disabled": "장애인 차량"
-        }
-        
-        # 현재 시간
-        now = datetime.now()
-        date_str = now.strftime("%Y-%m-%d")
-        time_str = now.strftime("%H:%M:%S")
-        
-        # 이력 데이터
-        history_data = {
-            "date": date_str,
-            "time": time_str,
-            "license_plate": license_plate,
-            "car_type": car_type,
-            "car_type_name": car_type_names.get(car_type, "-"),
-            "action": "주차" if action == "park" else "출차",
-            "location": location
-        }
-        
-        # 이력 추가
-        self.parking_history.append(history_data)
     
     def get_parked_vehicles(self):
         """주차된 차량 목록 반환"""
@@ -506,12 +639,7 @@ class ParkingDataManager(QObject):
         """차량 위치 설정 (토픽에서 수신 또는 수동 설정)"""
         self.current_parking_location = location
         self.parking_location_updated.emit(location)
-        if hasattr(self, 'location_publisher') and self.location_publisher is not None:
-            msg = String()
-            msg.data = location
-            self.location_publisher.publish(msg)
-            print(f"[ROS Publish] /parking/location: {location}")
-        
+    
     def get_parking_history(self):
         """주차 이력 반환"""
         return self.parking_history
@@ -608,25 +736,13 @@ class StartScreen(QWidget):
         layout.setSpacing(0)
         layout.setContentsMargins(0, 60, 0, 30)
 
-        # 로봇 이모지
-        robot_label = QLabel("🤖")
-        robot_label.setAlignment(Qt.AlignCenter)
-        robot_label.setStyleSheet("font-size: 70px; margin-bottom: 10px;")
-        layout.addWidget(robot_label)
-
         # 타이틀
-        title_label = QLabel("로봇 자동화\n주차 시스템")
+        title_label = QLabel("🤖\n로봇 자동화\n주차 시스템")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("color: white; font-size: 44px; font-weight: bold; line-height: 120%; letter-spacing: 1px;")
         layout.addWidget(title_label)
 
-        # 서브타이틀
-        subtitle_label = QLabel("작업을 선택하세요")
-        subtitle_label.setAlignment(Qt.AlignCenter)
-        subtitle_label.setStyleSheet("color: #7CFF7C; font-size: 24px; margin-top: 10px; margin-bottom: 40px;")
-        layout.addWidget(subtitle_label)
-
-        layout.addSpacing(30)
+        layout.addSpacing(100)
 
         # 버튼 영역
         btn_layout = QVBoxLayout()
@@ -702,6 +818,12 @@ class ParkingManagementGUI(QMainWindow):
         # 카메라 프레임 시그널 연결
         self.data_manager.camera_frame_updated.connect(self.on_camera_frame_updated)
         
+        # OCR 결과 시그널 연결 추가
+        self.data_manager.ocr_result_updated.connect(self.on_ocr_result_updated)
+        
+        # 파일 변경 감지 시그널 연결 제거
+        # self.data_manager.file_changed.connect(self.on_file_changed)
+        
         # 현재 차량 정보
         self.current_license_plate = ""
         self.current_car_type = "normal"
@@ -721,16 +843,16 @@ class ParkingManagementGUI(QMainWindow):
         
     def __del__(self):
         # 객체 소멸 시 데이터 저장 및 ROS 종료
-        print("프로그램 종료 중... 데이터 저장")
-        self.data_manager.save_data()
+        logger.info("프로그램 종료 중... ROS 종료")
+        # closeEvent에서 이미 데이터를 저장했으므로 여기서는 저장하지 않음
+        # self.data_manager.save_data()
         self.data_manager.stop_ros()
     
     def closeEvent(self, event):
         """프로그램 종료 시 호출되는 이벤트"""
-        print("프로그램 종료 이벤트... 데이터 저장")
-        # 데이터 저장 및 ROS 종료
-        self.data_manager.save_data()
-        self.data_manager.stop_ros()
+        logger.info("프로그램 종료 이벤트...")
+        # ROS 종료는 __del__에서 처리
+        # self.data_manager.stop_ros()
         # 기본 종료 이벤트 처리
         super().closeEvent(event)
     
@@ -825,7 +947,7 @@ class ParkingManagementGUI(QMainWindow):
     
     def show_start_screen(self):
         """시작 화면 표시"""
-        print("시작 화면으로 전환")
+        logger.info("시작 화면으로 전환")
         self.stack.setCurrentIndex(0)
         
         # 버튼 상태 업데이트
@@ -848,7 +970,7 @@ class ParkingManagementGUI(QMainWindow):
     
     def show_parking_screen(self):
         """주차 화면 표시"""
-        print("주차 화면으로 전환")
+        logger.info("주차 화면으로 전환")
         self.stack.setCurrentIndex(1)
         
         # 버튼 상태 업데이트
@@ -882,7 +1004,7 @@ class ParkingManagementGUI(QMainWindow):
         
     def show_exit_screen(self):
         """출차 화면 표시"""
-        print("출차 화면으로 전환")
+        logger.info("출차 화면으로 전환")
         self.stack.setCurrentIndex(2)
         
         # 버튼 상태 업데이트
@@ -895,7 +1017,7 @@ class ParkingManagementGUI(QMainWindow):
         
         # 출차 화면에서는 주차된 차량 목록 표시
         parked_vehicles = self.data_manager.get_parked_vehicles()
-        print(f"출차 화면 전환 - 주차된 차량: {parked_vehicles}")
+        logger.info(f"출차 화면 전환 - 주차된 차량: {parked_vehicles}")
         
         if parked_vehicles:
             # 첫 번째 주차된 차량 정보 표시
@@ -924,19 +1046,19 @@ class ParkingManagementGUI(QMainWindow):
                 self.update_car_type_info(self.exit_panel, car_type_text)
                 self.update_bottom_info(self.exit_panel, "차량 위치", location)
                 
-                print(f"출차 화면 정보 업데이트: 번호판={license_plate}, 타입={car_type_text}, 위치={location}")
+                logger.info(f"출차 화면 정보 업데이트: 번호판={license_plate}, 타입={car_type_text}, 위치={location}")
             else:
                 # 주차된 차량이 없는 경우
                 self.update_bottom_info(self.exit_panel, "차량 번호", "-")
                 self.update_car_type_info(self.exit_panel, "일반 차량")
                 self.update_bottom_info(self.exit_panel, "차량 위치", "-")
-                print("차량 정보가 없습니다")
+                logger.info("차량 정보가 없습니다")
         else:
             # 주차된 차량이 없는 경우
             self.update_bottom_info(self.exit_panel, "차량 번호", "-")
             self.update_car_type_info(self.exit_panel, "일반 차량")
             self.update_bottom_info(self.exit_panel, "차량 위치", "-")
-            print("주차된 차량이 없습니다")
+            logger.info("주차된 차량이 없습니다")
     
     def update_parking_info(self, data):
         """주차장 정보 업데이트"""
@@ -1088,75 +1210,97 @@ class ParkingManagementGUI(QMainWindow):
                 # 취소 버튼 클릭 시 홈 화면으로 돌아가기
                 self.show_start_screen()
         else:
-            # 번호판 정보가 없으면 기존 방식으로 차량 타입 선택
-            dialog = ConfirmDialog("주차 시작", "주차할 차량 타입을 선택하세요:", ["normal", "ev", "disabled"], self)
-            result = dialog.exec_()
+            # 번호판 정보가 없으면 OCR 결과를 기다리라는 메시지 표시
+            msg = QMessageBox(self)
+            msg.setWindowTitle("차량 인식 대기")
+            msg.setText("차량 번호판을 인식 중입니다.\n잠시만 기다려주세요.")
+            msg.setIcon(QMessageBox.Information)
             
-            if result == QDialog.Accepted:
-                car_type = dialog.get_selected_car_type()
+            # 수동 입력 버튼 추가
+            manual_button = msg.addButton(QMessageBox.Ok)
+            manual_button.setText("수동 입력")
+            manual_button.setStyleSheet("background-color: #90EE90; color: black; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
+           
+            # 취소 버튼 추가
+            ok_button = msg.addButton(QMessageBox.Cancel)
+            ok_button.setText("취소")
+            ok_button.setStyleSheet("background-color: #FF6B6B; color: white; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
+
+            result = msg.exec_()
+            
+            # 수동 입력 버튼 클릭 시
+            if msg.clickedButton() == manual_button:
+                # 기존 방식으로 차량 타입 선택
+                dialog = ConfirmDialog("주차 시작", "주차할 차량 타입을 선택하세요:", ["normal", "ev", "disabled"], self)
+                result = dialog.exec_()
                 
-                # 차량 번호 입력 다이얼로그 표시
-                license_plate = self.show_license_input_dialog()
-                if not license_plate:  # 취소하거나 입력하지 않은 경우
-                    # 홈 화면으로 돌아가기
-                    self.show_start_screen()
-                    return
-                
-                # 입력받은 번호판으로 주차 처리
-                success, reason = self.data_manager.simulate_parking(car_type, license_plate)
-                
-                if success:
-                    # 주차 화면으로 전환
-                    self.show_parking_screen()
+                if result == QDialog.Accepted:
+                    car_type = dialog.get_selected_car_type()
                     
-                    # 차량 위치 정보 가져오기
-                    location = self.data_manager.get_vehicle_location(license_plate)
-                    # 주차 패널의 하단 정보 업데이트 - 차량 위치 표시
-                    self.update_bottom_info(self.parking_panel, "차량 위치", location)
-                    # 차량 번호 정보 업데이트
-                    self.update_bottom_info(self.parking_panel, "차량 번호", license_plate)
+                    # 차량 번호 입력 다이얼로그 표시
+                    license_plate = self.show_license_input_dialog()
+                    if not license_plate:  # 취소하거나 입력하지 않은 경우
+                        # 홈 화면으로 돌아가기
+                        self.show_start_screen()
+                        return
                     
-                    car_type_names = {
-                        "normal": "일반 차량",
-                        "ev": "전기 차량",
-                        "disabled": "장애인 차량"
-                    }
-                    # 차량 타입 정보 업데이트
-                    self.update_car_type_info(self.parking_panel, car_type_names[car_type])
+                    # 입력받은 번호판으로 주차 처리
+                    success, reason = self.data_manager.simulate_parking(car_type, license_plate)
                     
-                    # 주차 완료 메시지
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle("주차 완료")
-                    msg.setText(f"{car_type_names[car_type]} 주차가 완료되었습니다.\n차량 번호: {license_plate}\n차량 위치: {location}")
-                    msg.setIcon(QMessageBox.Information)
-                    
-                    # OK 버튼 스타일 변경
-                    ok_button = msg.addButton(QMessageBox.Ok)
-                    ok_button.setText("확인")
-                    ok_button.setStyleSheet("background-color: #90EE90; color: black; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
-                    
-                    msg.exec_()
-                elif reason == "duplicate":
-                    QMessageBox.warning(self, "주차 불가", f"번호판 '{license_plate}'는 이미 주차되어 있습니다.")
-                    # 홈 화면으로 돌아가기
-                    self.show_start_screen()
+                    if success:
+                        # 주차 화면으로 전환
+                        self.show_parking_screen()
+                        
+                        # 차량 위치 정보 가져오기
+                        location = self.data_manager.get_vehicle_location(license_plate)
+                        # 주차 패널의 하단 정보 업데이트 - 차량 위치 표시
+                        self.update_bottom_info(self.parking_panel, "차량 위치", location)
+                        # 차량 번호 정보 업데이트
+                        self.update_bottom_info(self.parking_panel, "차량 번호", license_plate)
+                        
+                        car_type_names = {
+                            "normal": "일반 차량",
+                            "ev": "전기 차량",
+                            "disabled": "장애인 차량"
+                        }
+                        # 차량 타입 정보 업데이트
+                        self.update_car_type_info(self.parking_panel, car_type_names[car_type])
+                        
+                        # 주차 완료 메시지
+                        msg = QMessageBox(self)
+                        msg.setWindowTitle("주차 완료")
+                        msg.setText(f"{car_type_names[car_type]} 주차가 완료되었습니다.\n차량 번호: {license_plate}\n차량 위치: {location}")
+                        msg.setIcon(QMessageBox.Information)
+                        
+                        # OK 버튼 스타일 변경
+                        ok_button = msg.addButton(QMessageBox.Ok)
+                        ok_button.setText("확인")
+                        ok_button.setStyleSheet("background-color: #90EE90; color: black; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
+                        
+                        msg.exec_()
+                    elif reason == "duplicate":
+                        QMessageBox.warning(self, "주차 불가", f"번호판 '{license_plate}'는 이미 주차되어 있습니다.")
+                        # 홈 화면으로 돌아가기
+                        self.show_start_screen()
+                    else:
+                        car_type_names = {
+                            "normal": "일반 차량",
+                            "ev": "전기 차량",
+                            "disabled": "장애인 차량"
+                        }
+                        QMessageBox.warning(self, "주차 불가", f"{car_type_names[car_type]} 주차 공간이 없습니다.")
+                        # 홈 화면으로 돌아가기
+                        self.show_start_screen()
                 else:
-                    car_type_names = {
-                        "normal": "일반 차량",
-                        "ev": "전기 차량",
-                        "disabled": "장애인 차량"
-                    }
-                    QMessageBox.warning(self, "주차 불가", f"{car_type_names[car_type]} 주차 공간이 없습니다.")
-                    # 홈 화면으로 돌아가기
+                    # 취소 버튼 클릭 시 홈 화면으로 돌아가기
                     self.show_start_screen()
             else:
-                # 취소 버튼 클릭 시 홈 화면으로 돌아가기
+                # 확인 버튼 클릭 시 홈 화면으로 돌아가기
                 self.show_start_screen()
     
     def show_license_input_dialog(self):
         """차량 번호 입력 다이얼로그 표시"""
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout
-        import re
         
         class LicenseInputDialog(QDialog):
             def __init__(self, parent=None):
@@ -1268,67 +1412,8 @@ class ParkingManagementGUI(QMainWindow):
             self.show_start_screen()
             return
         
-        # YOLO로 인식된 번호판 정보가 있으면 해당 번호판으로 출차 처리
-        if self.current_license_plate and self.current_license_plate in parked_vehicles:
-            vehicle_info = parked_vehicles[self.current_license_plate]
-            car_type = vehicle_info['car_type']
-            location = vehicle_info['location']
-            
-            car_type_names = {
-                "normal": "일반 차량",
-                "ev": "전기 차량",
-                "disabled": "장애인 차량"
-            }
-            
-            # 번호판 정보로 출차 확인 메시지
-            message = f"번호판: {self.current_license_plate}\n차량 타입: {car_type_names[car_type]}\n차량 위치: {location}\n\n출차를 시작하시겠습니까?"
-            dialog = ConfirmDialog("출차 시작", message, None, self)
-            result = dialog.exec_()
-            
-            if result == QDialog.Accepted:
-                # 번호판으로 출차 처리
-                success, car_type, location = self.data_manager.simulate_leaving(self.current_license_plate)
-                
-                if success:
-                    # 출차 화면으로 전환
-                    self.show_exit_screen()
-                    
-                    # 출차 완료 메시지
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle("출차 완료")
-                    msg.setText(f"{car_type_names[car_type]} 출차가 완료되었습니다.\n차량 번호: {self.current_license_plate}")
-                    msg.setIcon(QMessageBox.Information)
-                    
-                    # OK 버튼 스타일 변경
-                    ok_button = msg.addButton(QMessageBox.Ok)
-                    ok_button.setText("확인")
-                    ok_button.setStyleSheet("background-color: #90EE90; color: black; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
-                    
-                    msg.exec_()
-                    
-                    # 번호판 정보 초기화
-                    self.current_license_plate = ""
-                    self.current_car_type = "normal"
-                else:
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle("출차 불가")
-                    msg.setText("주차된 차량을 찾을 수 없습니다.")
-                    msg.setIcon(QMessageBox.Warning)
-                    
-                    # OK 버튼 스타일 변경
-                    ok_button = msg.addButton(QMessageBox.Ok)
-                    ok_button.setText("확인")
-                    ok_button.setStyleSheet("background-color: #90EE90; color: black; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
-                    
-                    msg.exec_()
-                    # 홈 화면으로 돌아가기
-                    self.show_start_screen()
-            else:
-                # 취소 버튼 클릭 시 홈 화면으로 돌아가기
-                self.show_start_screen()
-        else:
-            # 차량 번호 뒷자리 입력 다이얼로그 표시
-            self.show_license_search_dialog()
+        # 항상 차량 번호 뒷자리 입력 다이얼로그 표시
+        self.show_license_search_dialog()
     
     def show_license_search_dialog(self):
         """차량 번호 뒷자리 검색 다이얼로그 표시"""
@@ -1428,11 +1513,11 @@ class ParkingManagementGUI(QMainWindow):
             
             # 버튼 추가 및 스타일 설정
             retry_button = msg.addButton("다시 검색", QMessageBox.AcceptRole)
-            cancel_button = msg.addButton("취소", QMessageBox.RejectRole)
+            manual_button = msg.addButton("취소", QMessageBox.RejectRole)
             
             # 버튼 스타일 설정
             retry_button.setStyleSheet("background-color: #90EE90; color: black; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
-            cancel_button.setStyleSheet("background-color: #FF6B6B; color: white; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
+            manual_button.setStyleSheet("background-color: #FF6B6B; color: white; font-size: 14px; font-weight: bold; padding: 5px 15px; min-width: 80px;")
             
             msg.exec_()
             
@@ -1470,6 +1555,11 @@ class ParkingManagementGUI(QMainWindow):
         result = dialog.exec_()
         
         if result == QDialog.Accepted:
+            # 확인 버튼 클릭 시 차량 위치 정보 publish
+            if location != '-':
+                logger.info(f"출차 확인 - 차량 위치 정보 발행: {location}")
+                self.data_manager.publish_location(location)
+            
             # 출차 처리
             success, car_type, location = self.data_manager.simulate_leaving(license_plate)
             
@@ -1884,6 +1974,39 @@ class ParkingManagementGUI(QMainWindow):
                 # QImage를 QPixmap으로 변환하여 표시
                 pixmap = QPixmap.fromImage(q_img)
                 image_label.setPixmap(pixmap.scaled(400, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def on_ocr_result_updated(self, license_plate, car_type):
+        """OCR 결과 업데이트 처리"""
+        logger.info(f"OCR 결과 업데이트: 번호판={license_plate}, 타입={car_type}")
+        
+        # 현재 차량 정보 업데이트
+        self.current_license_plate = license_plate
+        self.current_car_type = car_type
+        
+        # 현재 화면에 따라 정보 업데이트
+        if self.stack.currentIndex() == 1:  # 주차 화면
+            # 차량 번호 정보 업데이트
+            self.update_bottom_info(self.parking_panel, "차량 번호", license_plate)
+            
+            # 차량 타입 정보 업데이트
+            car_type_names = {
+                "normal": "일반 차량",
+                "ev": "전기 차량",
+                "disabled": "장애인 차량"
+            }
+            self.update_car_type_info(self.parking_panel, car_type_names[car_type])
+        
+        elif self.stack.currentIndex() == 2:  # 출차 화면
+            # 차량 번호 정보 업데이트
+            self.update_bottom_info(self.exit_panel, "차량 번호", license_plate)
+            
+            # 차량 타입 정보 업데이트
+            car_type_names = {
+                "normal": "일반 차량",
+                "ev": "전기 차량",
+                "disabled": "장애인 차량"
+            }
+            self.update_car_type_info(self.exit_panel, car_type_names[car_type])
 
 def main():
     app = QApplication(sys.argv)
