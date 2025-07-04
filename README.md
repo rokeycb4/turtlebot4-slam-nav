@@ -1,6 +1,7 @@
-# turtlebot4-slam-nav
+# 로봇 자동화 주차 시스템
 SLAM 기반 자율주행 로봇 시스템 구현
 
+[소스코드](https://github.com/rokeycb4/turtlebot4-slam-nav/tree/main/rokey_ws/src/rokey_pjt/rokey_pjt)  
 
 ## How to use  
 
